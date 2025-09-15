@@ -1,0 +1,29 @@
+{
+    # For development - remove in production
+    auto_https off
+}
+
+:80 {
+    # Proxy React frontend hosted on Nginx
+    handle_path / {
+        reverse_proxy frontend-service:8000
+    }
+
+    # WebSocket connections for chat
+    handle /ws* {
+        reverse_proxy chat-service:8001
+    }
+
+    # API routes
+    handle /api/media/* {
+        reverse_proxy media-service:8002
+    }
+
+    handle /api/chat/* {
+        reverse_proxy chat-service:8001
+    }
+
+    handle /api/participants/* {
+        reverse_proxy participant-service:8003
+    }
+}
