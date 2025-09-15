@@ -1,6 +1,18 @@
 version: '3.8'
 
 services:
+  # Caddy Proxy Server
+  caddy:
+    container_name: caddy
+    image: caddy:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - chat-network
   # Frontend React App
 #  frontend:
 #    build: ./frontend
@@ -95,3 +107,5 @@ networks:
 volumes:
   mongo_data:
   rabbitmq_data:
+  caddy_data:
+  caddy_config:
