@@ -37,15 +37,26 @@ mongoose.connect(DATABASE_URL, {
 
 
 // RabbitMQ Connection
-try {
-  const connection = await amqp.connect(RABBITMQ_URL);
-  const channel = await connection.createChannel();
-  await channel.assertQueue('user_actions', { durable: true });
-  await channel.assertQueue('logs', { durable: true });
-  console.log('Connected to RabbitMQ');
-} catch (error) {
-  console.error('RabbitMQ connection error:', error);
+async function connectRabbitMQ() {
+  try {
+    const connection = await amqp.connect(RABBITMQ_URL);
+    const channel = await connection.createChannel();
+    await channel.assertQueue('user_actions', { durable: true });
+    await channel.assertQueue('logs', { durable: true });
+    console.log('Connected to RabbitMQ');
+    return channel;
+  } catch (error) {
+    console.error('RabbitMQ connection error:', error);
+    throw error;
+  }
 }
+
+let channel;
+connectRabbitMQ().then(ch => {
+  channel = ch;
+}).catch(err => {
+  console.error('Failed to establish RabbitMQ channel:', err);
+});
 
 // Helper functions
 const logAction = async (action, username) => {
