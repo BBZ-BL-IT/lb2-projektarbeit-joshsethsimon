@@ -116,6 +116,11 @@ services:
       - chat-network
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 networks:
   chat-network:
