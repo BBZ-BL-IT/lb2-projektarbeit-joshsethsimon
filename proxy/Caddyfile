@@ -26,4 +26,8 @@
     handle /api/participants/* {
         reverse_proxy participant-service:8003
     }
+
+    handle /api/logs/* {
+        reverse_proxy log-service:8004
+    }
 }
