@@ -1,7 +1,7 @@
 {
   "name": "log-service",
   "version": "1.0.0",
-  "description": "Logs Worker & API",
+  "description": "Logs Worker and API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
