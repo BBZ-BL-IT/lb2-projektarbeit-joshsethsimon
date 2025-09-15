@@ -40,7 +40,6 @@ mongoose.connect(DATABASE_URL, {
 async function connectRabbitMQ() {
   const connection = await amqp.connect(RABBITMQ_URL);
   const channel = await connection.createChannel();
-  await channel.assertQueue('user_actions', { durable: true });
   await channel.assertQueue('logs', { durable: true });
   console.log('Connected to RabbitMQ');
   return channel;
