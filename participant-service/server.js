@@ -90,7 +90,8 @@ const userSchema = new mongoose.Schema({
   },
   lastSeen: {
     type: Date,
-    default: Date.now
+    default: Date.now,
+    index: { expires: '1h' } // Users not seen for 1 hour will be automatically deleted
   }
 }, {
   timestamps: true
@@ -136,19 +137,6 @@ app.use((err, req, res, next) => {
     timestamp: new Date().toISOString()
   });
 });
-
-// Clean up old users every hour
-setInterval(async () => {
-  const cutoff = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
-  try {
-    const result = await User.deleteMany({ lastSeen: { $lt: cutoff } });
-    if (result.deletedCount > 0) {
-      console.log(`Cleaned up ${result.deletedCount} old users`);
-    }
-  } catch (error) {
-    console.error('Error cleaning up old users:', error);
-  }
-}, 60 * 60 * 1000); // Run every hour
 
 // 404 handler
 app.use('*', (req, res) => {
