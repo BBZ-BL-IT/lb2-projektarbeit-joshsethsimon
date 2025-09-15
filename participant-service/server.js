@@ -7,7 +7,7 @@ const amqp = require('amqplib');
 const app = express();
 const PORT = process.env.PORT || 8003;
 const DATABASE_URL = process.env.DATABASE_URL || 'mongodb://mongodb:27017/chatapp';
-const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://rabbitmq:5672';
+const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://guest:guest@rabbitmq:5672';
 
 // Middleware
 app.use(helmet());

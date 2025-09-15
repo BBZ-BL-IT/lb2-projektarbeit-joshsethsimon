@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # Frontend React App
+#  frontend:
+#    build: ./frontend
+#    ports:
+#      - "8000:8000"
+#    environment:
+#      - REACT_APP_API_URL=http://localhost:5000
+#      - REACT_APP_WS_URL=ws://localhost:5001
+#    depends_on:
+#      - backend
+#      - websocket
+#    networks:
+#      - chat-network
+
+  # Participant Service
+  participant-service:
+    container_name: participant-service
+    build: ./participant-service
+    ports:
+      - "8003:8003"
+    environment:
+      - PORT=8003
+      - DATABASE_URL=mongodb://mongodb:27017/chatapp
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      - mongodb
+      - rabbitmq
+    networks:
+      - chat-network
+
+  # Log Service
+  log-service:
+    container_name: log-service
+    build: ./log-service
+    ports:
+      - "8004:8004"
+    environment:
+      - PORT=8004
+      - DATABASE_URL=mongodb://mongodb:27017/chatapp
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      - mongodb
+      - rabbitmq
+    networks:
+      - chat-network
+  # Backend API Service
+#  backend:
+#    build: ./backend
+#    ports:
+#      - "5000:5000"
+#    environment:
+#      - DATABASE_URL=mongodb://mongo:27017/chatapp
+#      - NODE_ENV=development
+#    depends_on:
+#      - mongo
+#    networks:
+#      - chat-network
+#    volumes:
+#      - ./backend:/app
+#      - /app/node_modules
+
+  # MongoDB Database
+  mongodb:
+    container_name: mongodb
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=chatapp
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - chat-network
+
+  # RabbitMQ Service
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+networks:
+  chat-network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  rabbitmq_data:
