@@ -113,6 +113,72 @@ app.get('/health', (req, res) => {
 // Auth Routes
 app.post('/api/participants/join', async (req, res, next) => {
   // TODO: Implement join logic
+    try {
+    const { username } = req.body;
+    
+    // Validate input
+    if (!username || typeof username !== 'string') {
+      return res.status(400).json({
+        error: 'Username is required and must be a string',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Trim and validate username length
+    const trimmedUsername = username.trim();
+    if (trimmedUsername.length < 3 || trimmedUsername.length > 20) {
+      return res.status(400).json({
+        error: 'Username must be between 3 and 20 characters',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Check if user already exists
+    let user = await User.findOne({ username: trimmedUsername });
+    
+    if (user) {
+      // User exists, update their online status
+      user.isOnline = true;
+      user.lastSeen = new Date();
+      await user.save();
+    } else {
+      // Create new user
+      user = new User({
+        username: trimmedUsername,
+        isOnline: true,
+        lastSeen: new Date()
+      });
+      await user.save();
+    }
+
+    // Log the action to RabbitMQ
+    await logAction('user_joined', trimmedUsername);
+    await sendUserAction('join', trimmedUsername);
+
+    res.status(200).json({
+      message: 'User joined successfully',
+      user: {
+        id: user._id,
+        username: user.username,
+        isOnline: user.isOnline,
+        lastSeen: user.lastSeen
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error in /join endpoint:', error);
+    
+    // Handle duplicate key error (race condition)
+    if (error.code === 11000) {
+      return res.status(409).json({
+        error: 'Username already exists',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    next(error);
+  }
 });
 
 app.post('/api/participants/leave', async (req, res, next) => {
