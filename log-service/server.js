@@ -110,6 +110,17 @@ channel.consume('logs', async (msg) => {
   console.error('Error consuming messages from RabbitMQ:', err);
 });
 
+// Clean up old logs every day
+setInterval(async () => {
+  const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000); // 6 hours ago
+  try {
+    const result = await Log.deleteMany({ timestamp: { $lt: cutoff } });
+    console.log(`Cleaned up ${result.deletedCount} old logs`);
+  } catch (error) {
+    console.error('Error cleaning up old logs:', error);
+  }
+}, 60 * 60 * 1000); // Every hour
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
