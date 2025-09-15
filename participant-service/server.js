@@ -137,6 +137,19 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Clean up old users every hour
+setInterval(async () => {
+  const cutoff = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
+  try {
+    const result = await User.deleteMany({ lastSeen: { $lt: cutoff } });
+    if (result.deletedCount > 0) {
+      console.log(`Cleaned up ${result.deletedCount} old users`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up old users:', error);
+  }
+}, 60 * 60 * 1000); // Run every hour
+
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({
