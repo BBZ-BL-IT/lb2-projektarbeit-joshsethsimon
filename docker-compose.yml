@@ -85,6 +85,23 @@ services:
     networks:
       - chat-network
 
+  # Mongo Express Web Interface
+  mongo-express:
+    container_name: mongo-express
+    image: mongo-express:latest
+    ports:
+      - "8081:8081" # Expose Mongo Express on port 8081
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=mongodb # MongoDB service name
+      - ME_CONFIG_MONGODB_PORT=27017
+      - ME_CONFIG_MONGODB_ENABLE_ADMIN=true
+      - ME_CONFIG_BASICAUTH_USERNAME=admin # Optional: Basic Auth username
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin # Optional: Basic Auth password
+    depends_on:
+      - mongodb
+    networks:
+      - chat-network
+
   # RabbitMQ Service
   rabbitmq:
     container_name: rabbitmq
