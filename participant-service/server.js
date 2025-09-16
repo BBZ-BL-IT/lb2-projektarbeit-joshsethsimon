@@ -139,7 +139,7 @@ app.get("/health", async (req, res) => {
   res.json({
     status: "OK",
     timestamp: new Date().toISOString(),
-    service: "log-service",
+    service: "participant-service",
     dependencies: {
       mongodb: mongoStatus,
       rabbitmq: rabbitMQStatus,
