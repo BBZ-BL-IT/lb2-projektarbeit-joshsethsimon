@@ -330,6 +330,14 @@ app.use("*", (req, res) => {
   });
 });
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Backend server running on port ${PORT}`);
-});
+// Start the server only after connections are established
+async function startServer() {
+  await connectMongoDB();
+  await setupRabbitMQ();
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Participant Service running on port ${PORT}`);
+  });
+}
+
+startServer();
