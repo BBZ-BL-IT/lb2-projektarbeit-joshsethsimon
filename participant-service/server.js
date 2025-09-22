@@ -67,11 +67,13 @@ async function connectMongoDB() {
   }
 }
 
+let channel;
+
 // RabbitMQ Connection
 async function setupRabbitMQ() {
   try {
     const connection = await amqp.connect(RABBITMQ_URL);
-    const channel = await connection.createChannel();
+    channel = await connection.createChannel();
     await channel.assertQueue("logs", { durable: true });
     console.log('Connected to RabbitMQ and asserting queue "logs"');
     await channel.assertQueue("user_actions", { durable: true });
