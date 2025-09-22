@@ -12,18 +12,17 @@ services:
     networks:
       - chat-network
   # Frontend React App
-#  frontend:
-#    build: ./frontend
-#    ports:
-#      - "8000:8000"
-#    environment:
-#      - REACT_APP_API_URL=http://localhost:5000
-#      - REACT_APP_WS_URL=ws://localhost:5001
-#    depends_on:
-#      - backend
-#      - websocket
-#    networks:
-#      - chat-network
+  frontend:
+    build: ./frontend
+    ports:
+      - "8000:8000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000
+      - REACT_APP_WS_URL=ws://localhost:5001
+    depends_on:
+      - caddy
+    networks:
+      - chat-network
 
   # Participant Service
   participant-service:
@@ -121,6 +120,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+
+  
 
 networks:
   chat-network:
