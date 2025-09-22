@@ -8,6 +8,9 @@
     handle_path / {
         reverse_proxy frontend:8000
     }
+    handle /static/* {
+        reverse_proxy frontend:8000
+    }
 
     # WebSocket connections for chat
     handle /ws* {
