@@ -1,4 +1,3 @@
-
 services:
   # Caddy Proxy Server
   caddy:
@@ -40,6 +39,22 @@ services:
     networks:
       - chat-network
 
+  # Chat Service
+  chat-service:
+    container_name: chat-service
+    build: ./chat-service
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - DATABASE_URL=mongodb://mongodb:27017/chatapp
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
+    depends_on:
+      - mongodb
+      - rabbitmq
+    networks:
+      - chat-network
+
   # Log Service
   log-service:
     container_name: log-service
@@ -56,20 +71,20 @@ services:
     networks:
       - chat-network
   # Backend API Service
-#  backend:
-#    build: ./backend
-#    ports:
-#      - "5000:5000"
-#    environment:
-#      - DATABASE_URL=mongodb://mongo:27017/chatapp
-#      - NODE_ENV=development
-#    depends_on:
-#      - mongo
-#    networks:
-#      - chat-network
-#    volumes:
-#      - ./backend:/app
-#      - /app/node_modules
+  #  backend:
+  #    build: ./backend
+  #    ports:
+  #      - "5000:5000"
+  #    environment:
+  #      - DATABASE_URL=mongodb://mongo:27017/chatapp
+  #      - NODE_ENV=development
+  #    depends_on:
+  #      - mongo
+  #    networks:
+  #      - chat-network
+  #    volumes:
+  #      - ./backend:/app
+  #      - /app/node_modules
 
   # MongoDB Database
   mongodb:
@@ -120,8 +135,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-
-  
 
 networks:
   chat-network:
