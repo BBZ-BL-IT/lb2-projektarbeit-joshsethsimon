@@ -80,7 +80,7 @@ async function setupRabbitMQ() {
     // Handle connection close and errors
     connection.on("close", () => {
       console.error("RabbitMQ connection closed. Attempting to reconnect...");
-      setTimeout(setupRabbitMQConsumer, 5000); // Attempt to reconnect after 5 seconds
+      setTimeout(setupRabbitMQ, 5000); // Attempt to reconnect after 5 seconds
     });
     connection.on("error", (err) => {
       console.error("RabbitMQ connection error:", err);
