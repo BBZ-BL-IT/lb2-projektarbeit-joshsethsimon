@@ -104,8 +104,8 @@ const logAction = async (action, username) => {
   }
 };
 
-const sendUserAction = async (action, username) => {
-  const userAction = { action, username, timestamp: new Date() };
+const sendUserAction = async (message, username) => {
+  const userAction = { message, username, timestamp: new Date() };
   try {
     await channel.sendToQueue(
       "user_actions",
@@ -190,7 +190,7 @@ app.post("/api/participants/join", async (req, res, next) => {
 
     // Log the action to RabbitMQ
     await logAction("user_joined", trimmedUsername);
-    await sendUserAction("join", trimmedUsername);
+    await sendUserAction("User joined: " + trimmedUsername, "SYSTEM");
 
     res.status(200).json({
       message: "User joined successfully",
@@ -249,7 +249,7 @@ app.post("/api/participants/leave", async (req, res, next) => {
 
     // Log the action to RabbitMQ
     await logAction("user_left", trimmedUsername);
-    await sendUserAction("leave", trimmedUsername);
+    await sendUserAction("User left: " + trimmedUsername, "SYSTEM");
 
     res.status(200).json({
       message: "User left successfully",
