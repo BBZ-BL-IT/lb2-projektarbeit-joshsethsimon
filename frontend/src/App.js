@@ -57,7 +57,7 @@ function App() {
   const remoteVideoRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
-  const remoteStreamRef = useRef(null); // Track remote stream to avoid re-setting
+  const remoteStreamRef = useRef(null);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const pendingIceCandidatesRef = useRef([]);
@@ -479,7 +479,6 @@ function App() {
       setCallDialogOpen(true);
       
       console.log("Dialog opened, waiting for render...");
-      // Wait longer for dialog to render
       await new Promise(resolve => setTimeout(resolve, 300));
       
       console.log("Checking video refs after dialog open:");
@@ -530,7 +529,6 @@ function App() {
       setCallDialogOpen(true);
       
       console.log("Dialog opened, waiting for render...");
-      // Wait longer for dialog to render
       await new Promise(resolve => setTimeout(resolve, 300));
       
       console.log("Checking video refs after dialog open:");
@@ -578,6 +576,14 @@ function App() {
       setError("Failed to accept video call: " + error.message);
       handleCallEnd();
     }
+  };
+
+  const declineCall = () => {
+    if (socket && incomingCall) {
+      socket.emit("call-end", { target: incomingCall.from });
+    }
+    setIncomingCall(null);
+    setCurrentCallTarget(null);
   };
 
   const handleCallAnswer = async (data) => {
@@ -859,7 +865,7 @@ function App() {
           <Typography>{incomingCall?.from} is calling you...</Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setIncomingCall(null)} color="error">
+          <Button onClick={declineCall} color="error">
             Decline
           </Button>
           <Button onClick={acceptCall} variant="contained" color="primary">
