@@ -702,173 +702,419 @@ function App() {
 
   if (!isLoggedIn) {
     return (
-      <Container maxWidth="sm" style={{ marginTop: "50px" }}>
-        <Paper elevation={3} style={{ padding: "30px", textAlign: "center" }}>
-          <Typography variant="h4" gutterBottom>
-            Chat App MVP
-          </Typography>
-          {error && (
-            <Alert severity="error" style={{ marginBottom: "20px" }}>
-              {error}
-            </Alert>
-          )}
-          <TextField
-            fullWidth
-            label="Username (3-20 characters, letters/numbers/underscore/hyphen only)"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && handleLogin()}
-            style={{ marginBottom: "20px" }}
-            disabled={loading}
-            error={!!error}
-          />
-          <Button
-            variant="contained"
-            color="primary"
-            onClick={handleLogin}
-            fullWidth
-            disabled={loading}
+      <Box
+        sx={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          padding: "20px",
+        }}
+      >
+        <Container maxWidth="sm">
+          <Paper
+            elevation={6}
+            sx={{
+              padding: "40px",
+              borderRadius: "16px",
+              textAlign: "center",
+              backdropFilter: "blur(10px)",
+              background: "rgba(255, 255, 255, 0.95)",
+            }}
           >
-            {loading ? "Joining..." : "Join Chat"}
-          </Button>
-        </Paper>
-      </Container>
+            <Typography
+              variant="h3"
+              gutterBottom
+              sx={{
+                fontWeight: 700,
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                marginBottom: "10px",
+              }}
+            >
+              Chat App
+            </Typography>
+            <Typography
+              variant="subtitle1"
+              color="text.secondary"
+              sx={{ marginBottom: "30px" }}
+            >
+              Connect and communicate instantly
+            </Typography>
+            {error && (
+              <Alert severity="error" sx={{ marginBottom: "24px", borderRadius: "8px" }}>
+                {error}
+              </Alert>
+            )}
+            <TextField
+              fullWidth
+              label="Enter your username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              onKeyPress={(e) => e.key === "Enter" && handleLogin()}
+              sx={{
+                marginBottom: "24px",
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "12px",
+                },
+              }}
+              disabled={loading}
+              error={!!error}
+              helperText="3-20 characters, letters/numbers/underscore/hyphen only"
+            />
+            <Button
+              variant="contained"
+              onClick={handleLogin}
+              fullWidth
+              disabled={loading}
+              sx={{
+                padding: "12px",
+                borderRadius: "12px",
+                fontSize: "16px",
+                fontWeight: 600,
+                textTransform: "none",
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                boxShadow: "0 4px 15px rgba(102, 126, 234, 0.4)",
+                "&:hover": {
+                  background: "linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)",
+                  boxShadow: "0 6px 20px rgba(102, 126, 234, 0.6)",
+                },
+              }}
+            >
+              {loading ? "Joining..." : "Join Chat"}
+            </Button>
+          </Paper>
+        </Container>
+      </Box>
     );
   }
 
   return (
-    <div>
-      <AppBar position="static">
+    <Box sx={{ minHeight: "100vh", bgcolor: "#f5f7fa" }}>
+      <AppBar
+        position="static"
+        elevation={0}
+        sx={{
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+        }}
+      >
         <Toolbar>
-          <Typography variant="h6" style={{ flexGrow: 1 }}>
-            Chat App - Welcome {username} (Room: {currentRoom})
+          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>
+            💬 Chat App - Welcome, {username}
           </Typography>
-          <IconButton color="inherit" onClick={refreshData} title="Refresh">
+          <IconButton
+            color="inherit"
+            onClick={refreshData}
+            title="Refresh"
+            sx={{
+              "&:hover": {
+                background: "rgba(255, 255, 255, 0.1)",
+              },
+            }}
+          >
             <Refresh />
           </IconButton>
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="lg" style={{ marginTop: "20px" }}>
+      <Container maxWidth="lg" sx={{ marginTop: "30px", marginBottom: "30px" }}>
         {error && (
-          <Alert 
-            severity="error" 
-            style={{ marginBottom: "20px" }}
+          <Alert
+            severity="error"
+            sx={{
+              marginBottom: "20px",
+              borderRadius: "12px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+            }}
             onClose={() => setError("")}
           >
             {error}
           </Alert>
         )}
-        
-        <Box display="flex" gap={2}>
-          <Paper style={{ width: "250px", padding: "15px" }}>
-            <Typography variant="h6" gutterBottom>
-              Online Users ({onlineUsers.length})
+
+        <Box display="flex" gap={3}>
+          {/* Online Users Panel */}
+          <Paper
+            elevation={2}
+            sx={{
+              width: "280px",
+              padding: "20px",
+              borderRadius: "16px",
+              background: "white",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+            }}
+          >
+            <Typography
+              variant="h6"
+              gutterBottom
+              sx={{
+                fontWeight: 600,
+                color: "#667eea",
+                marginBottom: "16px",
+              }}
+            >
+              🟢 Online Users ({onlineUsers.length})
             </Typography>
             <List dense>
               {onlineUsers.map((user, index) => (
-                <ListItem key={index}>
-                  <ListItemText 
-                    primary={user} 
-                    primaryTypographyProps={{ variant: "body2" }}
+                <ListItem
+                  key={index}
+                  sx={{
+                    borderRadius: "8px",
+                    marginBottom: "8px",
+                    "&:hover": {
+                      background: "#f5f7fa",
+                    },
+                  }}
+                >
+                  <ListItemText
+                    primary={user}
+                    primaryTypographyProps={{
+                      variant: "body2",
+                      fontWeight: 500,
+                    }}
                   />
                   <IconButton
-                    color="primary"
                     size="small"
                     onClick={() => startCall(user)}
                     title="Start Video Call"
+                    sx={{
+                      color: "#667eea",
+                      "&:hover": {
+                        background: "rgba(102, 126, 234, 0.1)",
+                      },
+                    }}
                   >
                     <VideoCall fontSize="small" />
                   </IconButton>
                 </ListItem>
               ))}
               {onlineUsers.length === 0 && (
-                <Typography variant="body2" color="textSecondary">
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ textAlign: "center", padding: "20px" }}
+                >
                   No other users online
                 </Typography>
               )}
             </List>
           </Paper>
 
-          <Paper style={{ flexGrow: 1, padding: "15px" }}>
+          {/* Chat Panel */}
+          <Paper
+            elevation={2}
+            sx={{
+              flexGrow: 1,
+              padding: "20px",
+              borderRadius: "16px",
+              background: "white",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
             <Box
-              height="400px"
-              overflow="auto"
-              marginBottom="15px"
-              border="1px solid #ddd"
-              padding="10px"
-              bgcolor="#fafafa"
+              sx={{
+                height: "500px",
+                overflow: "auto",
+                marginBottom: "20px",
+                padding: "16px",
+                borderRadius: "12px",
+                bgcolor: "#f8f9fa",
+                border: "1px solid #e9ecef",
+                "&::-webkit-scrollbar": {
+                  width: "8px",
+                },
+                "&::-webkit-scrollbar-track": {
+                  background: "#f1f1f1",
+                  borderRadius: "10px",
+                },
+                "&::-webkit-scrollbar-thumb": {
+                  background: "#888",
+                  borderRadius: "10px",
+                  "&:hover": {
+                    background: "#555",
+                  },
+                },
+              }}
             >
               {loading && (
-                <Typography variant="body2" color="textSecondary" align="center">
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  align="center"
+                  sx={{ padding: "20px" }}
+                >
                   Loading messages...
                 </Typography>
               )}
               {messages.map((msg, index) => (
-                <Box key={msg._id || index} marginBottom="10px">
-                  <Typography variant="subtitle2" color="primary">
+                <Box
+                  key={msg._id || index}
+                  sx={{
+                    marginBottom: "16px",
+                    padding: "12px",
+                    borderRadius: "12px",
+                    background: msg.username === username ? "#e3f2fd" : "white",
+                    border: "1px solid",
+                    borderColor: msg.username === username ? "#90caf9" : "#e0e0e0",
+                    maxWidth: "70%",
+                    marginLeft: msg.username === username ? "auto" : "0",
+                    marginRight: msg.username === username ? "0" : "auto",
+                  }}
+                >
+                  <Typography
+                    variant="subtitle2"
+                    sx={{
+                      color: "#667eea",
+                      fontWeight: 600,
+                      marginBottom: "4px",
+                    }}
+                  >
                     {msg.username}
                   </Typography>
-                  <Typography variant="body2" style={{ wordBreak: "break-word" }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      wordBreak: "break-word",
+                      color: "#2c3e50",
+                      lineHeight: 1.5,
+                    }}
+                  >
                     {msg.message}
                   </Typography>
-                  <Typography variant="caption" color="textSecondary">
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "#95a5a6",
+                      display: "block",
+                      marginTop: "4px",
+                    }}
+                  >
                     {new Date(msg.timestamp).toLocaleTimeString()}
                   </Typography>
                 </Box>
               ))}
-              
+
               {typingUsers.length > 0 && (
-                <Box marginBottom="10px">
-                  <Typography variant="caption" color="textSecondary" fontStyle="italic">
-                    {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"} typing...
+                <Box sx={{ marginBottom: "10px", paddingLeft: "12px" }}>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "#95a5a6",
+                      fontStyle: "italic",
+                    }}
+                  >
+                    {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"}{" "}
+                    typing...
                   </Typography>
                 </Box>
               )}
-              
+
               <div ref={messagesEndRef} />
             </Box>
 
-            <Box display="flex" gap={1}>
+            <Box display="flex" gap={2}>
               <TextField
                 fullWidth
                 multiline
                 maxRows={3}
-                placeholder="Type your message... (Press Enter to send)"
+                placeholder="Type your message..."
                 value={newMessage}
                 onChange={handleTyping}
                 onKeyPress={handleKeyPress}
                 disabled={!socket?.connected}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: "12px",
+                    background: "#f8f9fa",
+                  },
+                }}
               />
               <Button
                 variant="contained"
-                color="primary"
                 onClick={sendMessage}
-                startIcon={<Send />}
                 disabled={!newMessage.trim() || !socket?.connected}
+                sx={{
+                  borderRadius: "12px",
+                  minWidth: "100px",
+                  textTransform: "none",
+                  fontWeight: 600,
+                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  boxShadow: "0 4px 15px rgba(102, 126, 234, 0.4)",
+                  "&:hover": {
+                    background: "linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)",
+                    boxShadow: "0 6px 20px rgba(102, 126, 234, 0.6)",
+                  },
+                }}
+                startIcon={<Send />}
               >
                 Send
               </Button>
             </Box>
             {!socket?.connected && (
-              <Typography variant="caption" color="error" style={{ marginTop: "5px" }}>
-                Disconnected from server
+              <Typography
+                variant="caption"
+                color="error"
+                sx={{ marginTop: "8px", textAlign: "center" }}
+              >
+                ⚠️ Disconnected from server
               </Typography>
             )}
           </Paper>
         </Box>
       </Container>
 
-      <Dialog open={!!incomingCall}>
-        <DialogTitle>Incoming Call</DialogTitle>
+      <Dialog
+        open={!!incomingCall}
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            padding: "8px",
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 600, color: "#667eea" }}>
+          📞 Incoming Call
+        </DialogTitle>
         <DialogContent>
-          <Typography>{incomingCall?.from} is calling you...</Typography>
+          <Typography sx={{ fontSize: "16px", color: "#2c3e50" }}>
+            <strong>{incomingCall?.from}</strong> is calling you...
+          </Typography>
         </DialogContent>
-        <DialogActions>
-          <Button onClick={declineCall} color="error">
+        <DialogActions sx={{ padding: "16px" }}>
+          <Button
+            onClick={declineCall}
+            sx={{
+              borderRadius: "8px",
+              textTransform: "none",
+              fontWeight: 600,
+              color: "#e74c3c",
+              "&:hover": {
+                background: "rgba(231, 76, 60, 0.1)",
+              },
+            }}
+          >
             Decline
           </Button>
-          <Button onClick={acceptCall} variant="contained" color="primary">
+          <Button
+            onClick={acceptCall}
+            variant="contained"
+            sx={{
+              borderRadius: "8px",
+              textTransform: "none",
+              fontWeight: 600,
+              background: "linear-gradient(135deg, #27ae60 0%, #229954 100%)",
+              boxShadow: "0 4px 15px rgba(39, 174, 96, 0.4)",
+              "&:hover": {
+                background: "linear-gradient(135deg, #229954 0%, #1e8449 100%)",
+              },
+            }}
+          >
             Accept
           </Button>
         </DialogActions>
@@ -879,52 +1125,107 @@ function App() {
         maxWidth="md"
         fullWidth
         onClose={() => !isCallActive && setCallDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            background: "#1a1a1a",
+          },
+        }}
       >
-        <DialogTitle>Video Call {currentCallTarget && `with ${currentCallTarget}`}</DialogTitle>
-        <DialogContent>
-          <Box display="flex" gap={2} justifyContent="center">
+        <DialogTitle
+          sx={{
+            fontWeight: 600,
+            color: "white",
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          }}
+        >
+          🎥 Video Call {currentCallTarget && `with ${currentCallTarget}`}
+        </DialogTitle>
+        <DialogContent sx={{ background: "#1a1a1a", padding: "24px" }}>
+          <Box display="flex" gap={3} justifyContent="center" flexWrap="wrap">
             <Box textAlign="center">
-              <Typography variant="subtitle2">You</Typography>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  color: "white",
+                  marginBottom: "8px",
+                  fontWeight: 600,
+                }}
+              >
+                You
+              </Typography>
               <video
                 ref={localVideoRef}
                 autoPlay
                 playsInline
                 muted
                 style={{
-                  width: "300px",
-                  height: "200px",
-                  border: "1px solid #ddd",
+                  width: "320px",
+                  height: "240px",
+                  border: "2px solid #667eea",
+                  borderRadius: "12px",
                   backgroundColor: "#000",
+                  objectFit: "cover",
                 }}
               />
             </Box>
             <Box textAlign="center">
-              <Typography variant="subtitle2">Remote</Typography>
+              <Typography
+                variant="subtitle2"
+                sx={{
+                  color: "white",
+                  marginBottom: "8px",
+                  fontWeight: 600,
+                }}
+              >
+                {currentCallTarget || "Remote"}
+              </Typography>
               <video
                 ref={remoteVideoRef}
                 autoPlay
                 playsInline
                 style={{
-                  width: "300px",
-                  height: "200px",
-                  border: "1px solid #ddd",
+                  width: "320px",
+                  height: "240px",
+                  border: "2px solid #667eea",
+                  borderRadius: "12px",
                   backgroundColor: "#000",
+                  objectFit: "cover",
                 }}
               />
             </Box>
           </Box>
         </DialogContent>
-        <DialogActions>
+        <DialogActions
+          sx={{
+            background: "#1a1a1a",
+            padding: "16px",
+            justifyContent: "center",
+            gap: 1,
+          }}
+        >
           <IconButton
             onClick={toggleMute}
-            color={isMuted ? "error" : "primary"}
+            sx={{
+              color: isMuted ? "#e74c3c" : "white",
+              background: isMuted ? "rgba(231, 76, 60, 0.2)" : "rgba(255,255,255,0.1)",
+              "&:hover": {
+                background: isMuted ? "rgba(231, 76, 60, 0.3)" : "rgba(255,255,255,0.2)",
+              },
+            }}
             title={isMuted ? "Unmute" : "Mute"}
           >
             {isMuted ? <MicOff /> : <Mic />}
           </IconButton>
           <IconButton
             onClick={toggleVideo}
-            color={!isVideoEnabled ? "error" : "primary"}
+            sx={{
+              color: !isVideoEnabled ? "#e74c3c" : "white",
+              background: !isVideoEnabled ? "rgba(231, 76, 60, 0.2)" : "rgba(255,255,255,0.1)",
+              "&:hover": {
+                background: !isVideoEnabled ? "rgba(231, 76, 60, 0.3)" : "rgba(255,255,255,0.2)",
+              },
+            }}
             title={!isVideoEnabled ? "Enable Video" : "Disable Video"}
           >
             {!isVideoEnabled ? <VideocamOff /> : <Videocam />}
@@ -932,14 +1233,23 @@ function App() {
           <Button
             onClick={endCall}
             variant="contained"
-            color="error"
             startIcon={<CallEnd />}
+            sx={{
+              borderRadius: "8px",
+              textTransform: "none",
+              fontWeight: 600,
+              background: "#e74c3c",
+              marginLeft: "8px",
+              "&:hover": {
+                background: "#c0392b",
+              },
+            }}
           >
             End Call
           </Button>
         </DialogActions>
       </Dialog>
-    </div>
+    </Box>
   );
 }
 
