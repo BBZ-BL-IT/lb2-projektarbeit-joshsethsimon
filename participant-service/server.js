@@ -151,10 +151,8 @@ app.get("/health", async (req, res) => {
 
 // Auth Routes
 app.post("/api/participants/join", async (req, res, next) => {
-  // TODO: Implement join logic
   try {
     const { username } = req.body;
-
     // Validate input
     if (!username || typeof username !== "string") {
       return res.status(400).json({
@@ -162,7 +160,6 @@ app.post("/api/participants/join", async (req, res, next) => {
         timestamp: new Date().toISOString(),
       });
     }
-
     // Trim and validate username length
     const trimmedUsername = username.trim();
     if (trimmedUsername.length < 3 || trimmedUsername.length > 20) {
@@ -171,10 +168,8 @@ app.post("/api/participants/join", async (req, res, next) => {
         timestamp: new Date().toISOString(),
       });
     }
-
     // Check if user already exists
     let user = await User.findOne({ username: trimmedUsername });
-
     if (user) {
       // User exists, update their online status
       user.isOnline = true;
@@ -189,11 +184,9 @@ app.post("/api/participants/join", async (req, res, next) => {
       });
       await user.save();
     }
-
     // Log the action to RabbitMQ
     await logAction("user_joined", trimmedUsername);
     await sendUserAction("User joined: " + trimmedUsername, "SYSTEM");
-
     res.status(200).json({
       message: "User joined successfully",
       user: {
@@ -206,24 +199,19 @@ app.post("/api/participants/join", async (req, res, next) => {
     });
   } catch (error) {
     console.error("Error in /join endpoint:", error);
-
-    // Handle duplicate key error (race condition)
     if (error.code === 11000) {
       return res.status(409).json({
         error: "Username already exists",
         timestamp: new Date().toISOString(),
       });
     }
-
     next(error);
   }
 });
 
 app.post("/api/participants/leave", async (req, res, next) => {
-  // TODO: Implement leave logic
   try {
     const { username } = req.body;
-
     // Validate input
     if (!username || typeof username !== "string") {
       return res.status(400).json({
@@ -231,28 +219,22 @@ app.post("/api/participants/leave", async (req, res, next) => {
         timestamp: new Date().toISOString(),
       });
     }
-
     const trimmedUsername = username.trim();
-
     // Find and update user
     const user = await User.findOne({ username: trimmedUsername });
-
     if (!user) {
       return res.status(404).json({
         error: "User not found",
         timestamp: new Date().toISOString(),
       });
     }
-
     // Set user as offline
     user.isOnline = false;
     user.lastSeen = new Date();
     await user.save();
-
     // Log the action to RabbitMQ
     await logAction("user_left", trimmedUsername);
     await sendUserAction("User left: " + trimmedUsername, "SYSTEM");
-
     res.status(200).json({
       message: "User left successfully",
       user: {
@@ -308,11 +290,39 @@ app.get("/api/participants/online", async (req, res, next) => {
 });
 
 app.get("/api/participants", async (req, res, next) => {
-  // TODO: Implement get participants logic
+  try {
+    // Get all participants
+    const participants = await User.find({})
+      .select("-__v")
+      .sort({ username: 1 });
+    res.status(200).json({
+      message: "Participants retrieved successfully",
+      participants,
+      count: participants.length,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error in /participants endpoint:", error);
+    next(error);
+  }
 });
 
 app.get("/api/participants/online", async (req, res, next) => {
-  // TODO: Implement get online participants logic
+  try {
+    // Get only online participants
+    const onlineParticipants = await User.find({ isOnline: true })
+      .select("-__v")
+      .sort({ username: 1 });
+    res.status(200).json({
+      message: "Online participants retrieved successfully",
+      participants: onlineParticipants,
+      count: onlineParticipants.length,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error in /participants/online endpoint:", error);
+    next(error);
+  }
 });
 
 // Error handling middleware
