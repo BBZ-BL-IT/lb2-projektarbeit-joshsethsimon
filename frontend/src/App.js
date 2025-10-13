@@ -1,4 +1,3 @@
-// frontend/src/App.js
 import React, { useState, useEffect, useRef } from "react";
 import {
   Container,
@@ -32,7 +31,6 @@ import {
 import io from "socket.io-client";
 import axios from "axios";
 
-// Updated API URLs to work with Caddy proxy
 const API_URL = process.env.REACT_APP_API_URL || "";
 
 function App() {
@@ -53,20 +51,17 @@ function App() {
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(true);
   const [callDialogOpen, setCallDialogOpen] = useState(false);
+  const [currentCallTarget, setCurrentCallTarget] = useState(null);
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
+  const remoteStreamRef = useRef(null); // Track remote stream to avoid re-setting
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const pendingIceCandidatesRef = useRef([]);
 
-  // WebRTC Configuration
-  const pcConfig = {
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-  };
-
-  // Auto-scroll to bottom when new messages arrive
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -97,7 +92,6 @@ function App() {
           setError("Failed to connect to chat server");
         });
 
-        // Handle incoming messages (both events for compatibility)
         newSocket.on("message", (data) => {
           setMessages((prev) => [...prev, data]);
         });
@@ -106,12 +100,10 @@ function App() {
           setMessages((prev) => [...prev, data]);
         });
 
-        // Handle message history
         newSocket.on("message-history", (history) => {
           setMessages(history);
         });
 
-        // Handle users list updates
         newSocket.on("users", (users) => {
           setOnlineUsers(users.filter((u) => u !== username));
         });
@@ -124,7 +116,6 @@ function App() {
           console.log(`${data.username} left the chat`);
         });
 
-        // Handle typing indicators
         newSocket.on("user-typing", (data) => {
           setTypingUsers(prev => {
             if (data.isTyping) {
@@ -137,18 +128,15 @@ function App() {
           });
         });
 
-        // Video call events
         newSocket.on("call-offer", handleCallOffer);
         newSocket.on("call-answer", handleCallAnswer);
         newSocket.on("ice-candidate", handleIceCandidate);
         newSocket.on("call-end", handleCallEnd);
 
-        // Handle message deletion
         newSocket.on("message-deleted", (data) => {
           setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
         });
 
-        // Handle errors
         newSocket.on("error", (data) => {
           setError(data.message);
         });
@@ -165,7 +153,6 @@ function App() {
     }
   }, [isLoggedIn, username]);
 
-  // Load initial messages when logged in
   useEffect(() => {
     if (isLoggedIn) {
       loadMessages();
@@ -199,7 +186,6 @@ function App() {
       }
     } catch (error) {
       console.error("Failed to load online users:", error);
-      // Don't show error for this as it's not critical
     }
   };
 
@@ -214,7 +200,6 @@ function App() {
       return;
     }
 
-    // Check if username contains only allowed characters
     if (!/^[a-zA-Z0-9_-]+$/.test(username.trim())) {
       setError("Username can only contain letters, numbers, underscores, and hyphens");
       return;
@@ -224,7 +209,6 @@ function App() {
       setLoading(true);
       setError("");
       
-      // Register/update user in the participant service
       await axios.post(`${API_URL}/api/participants`, { 
         username: username.trim() 
       });
@@ -252,7 +236,6 @@ function App() {
     };
 
     try {
-      // Send via WebSocket for real-time delivery
       if (socket && socket.connected) {
         socket.emit("message", {
           ...messageData,
@@ -262,7 +245,6 @@ function App() {
         setNewMessage("");
         setError("");
       } else {
-        // Fallback: send via REST API if WebSocket is not connected
         await axios.post(`${API_URL}/api/chat/messages`, messageData);
         setNewMessage("");
         setError("");
@@ -272,7 +254,6 @@ function App() {
       setError("Failed to send message. Please try again.");
     }
 
-    // Clear typing indicator
     if (socket && socket.connected) {
       socket.emit("typing", { isTyping: false });
     }
@@ -285,28 +266,52 @@ function App() {
     }
   };
 
-  // Handle typing indicator
   const handleTyping = (e) => {
     setNewMessage(e.target.value);
     
     if (socket && socket.connected) {
       socket.emit("typing", { isTyping: true });
       
-      // Clear existing timeout
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
       
-      // Set new timeout to stop typing indicator
       typingTimeoutRef.current = setTimeout(() => {
         socket.emit("typing", { isTyping: false });
       }, 1000);
     }
   };
 
-  // Video Call Functions (keeping existing implementation)
+  // Effect to attach local stream to video element when dialog opens
+  useEffect(() => {
+    console.log("Dialog open effect:", { 
+      callDialogOpen, 
+      hasLocalStream: !!localStreamRef.current, 
+      hasLocalVideoRef: !!localVideoRef.current 
+    });
+    
+    if (callDialogOpen && localStreamRef.current && localVideoRef.current) {
+      console.log("Attaching local stream to video element");
+      console.log("Local stream tracks:", localStreamRef.current.getTracks().map(t => ({
+        kind: t.kind,
+        enabled: t.enabled,
+        readyState: t.readyState
+      })));
+      
+      localVideoRef.current.srcObject = localStreamRef.current;
+      localVideoRef.current.onloadedmetadata = () => {
+        console.log("Local video metadata loaded");
+        localVideoRef.current.play()
+          .then(() => console.log("Local video playing"))
+          .catch(e => console.error("Local video play error:", e));
+      };
+    }
+  }, [callDialogOpen]);
+
   const initializeWebRTC = async () => {
     try {
+      console.log("=== INITIALIZING WEBRTC ===");
+      
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("WebRTC is not supported by this browser");
       }
@@ -323,26 +328,46 @@ function App() {
         },
       };
 
+      console.log("Requesting media with constraints:", constraints);
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia(constraints);
+        console.log("Got media stream:", stream.id);
+        console.log("Stream tracks:", stream.getTracks().map(t => ({
+          kind: t.kind,
+          label: t.label,
+          enabled: t.enabled,
+          readyState: t.readyState
+        })));
       } catch (videoError) {
         console.warn("Video not available, trying audio only:", videoError);
         try {
           stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           setIsVideoEnabled(false);
         } catch (audioError) {
-          console.warn("Audio not available, trying without media:", audioError);
-          stream = new MediaStream();
+          console.warn("Audio not available:", audioError);
+          throw new Error("No media devices available");
         }
       }
 
       localStreamRef.current = stream;
-      if (localVideoRef.current && stream.getVideoTracks().length > 0) {
+      console.log("Stored stream in localStreamRef");
+      
+      // If video element already exists, attach stream immediately
+      if (localVideoRef.current) {
+        console.log("Local video ref exists, attaching stream NOW");
         localVideoRef.current.srcObject = stream;
+        localVideoRef.current.onloadedmetadata = () => {
+          console.log("Local video metadata loaded in initWebRTC");
+          localVideoRef.current.play()
+            .then(() => console.log("Local video playing from initWebRTC"))
+            .catch(e => console.error("Local video play error:", e));
+        };
+      } else {
+        console.log("Local video ref DOES NOT exist yet, will attach in useEffect");
       }
 
-      const enhancedPcConfig = {
+      const pcConfig = {
         iceServers: [
           { urls: "stun:stun.l.google.com:19302" },
           { urls: "stun:stun1.l.google.com:19302" },
@@ -351,35 +376,79 @@ function App() {
         iceCandidatePoolSize: 10,
       };
 
-      const peerConnection = new RTCPeerConnection(enhancedPcConfig);
+      const peerConnection = new RTCPeerConnection(pcConfig);
       peerConnectionRef.current = peerConnection;
+      console.log("Created peer connection");
 
+      // Add tracks to peer connection
       stream.getTracks().forEach((track) => {
-        peerConnection.addTrack(track, stream);
+        console.log(`Adding ${track.kind} track (${track.label}) to peer connection`);
+        const sender = peerConnection.addTrack(track, stream);
+        console.log("Track added, sender:", sender.track?.kind);
       });
 
+      // Handle ICE candidates
       peerConnection.onicecandidate = (event) => {
-        if (event.candidate && socket) {
-          socket.emit("ice-candidate", event.candidate);
+        if (event.candidate && socket && currentCallTarget) {
+          console.log("Sending ICE candidate to", currentCallTarget);
+          socket.emit("ice-candidate", {
+            target: currentCallTarget,
+            candidate: event.candidate
+          });
+        } else if (!event.candidate) {
+          console.log("ICE gathering complete");
         }
       };
 
+      // Handle incoming tracks
       peerConnection.ontrack = (event) => {
-        if (remoteVideoRef.current && event.streams[0]) {
-          remoteVideoRef.current.srcObject = event.streams[0];
+        console.log("=== RECEIVED REMOTE TRACK ===");
+        console.log("Track kind:", event.track.kind);
+        console.log("Track state:", event.track.readyState);
+        console.log("Number of streams:", event.streams?.length);
+        
+        if (event.streams && event.streams[0]) {
+          const remoteStream = event.streams[0];
+          console.log("Remote stream ID:", remoteStream.id);
+          console.log("Remote stream tracks:", remoteStream.getTracks().map(t => ({
+            kind: t.kind,
+            enabled: t.enabled,
+            readyState: t.readyState
+          })));
+          
+          // Set remote stream
+          if (remoteVideoRef.current) {
+            console.log("Setting remote video srcObject");
+            remoteVideoRef.current.srcObject = remoteStream;
+            remoteVideoRef.current.onloadedmetadata = () => {
+              console.log("Remote video metadata loaded, attempting play");
+              remoteVideoRef.current.play()
+                .then(() => console.log("Remote video playing successfully"))
+                .catch(e => console.error("Remote video play error:", e));
+            };
+          } else {
+            console.error("Remote video ref is NULL!");
+          }
+        } else {
+          console.error("No streams in track event!");
         }
       };
 
       peerConnection.onconnectionstatechange = () => {
-        console.log("WebRTC Connection State:", peerConnection.connectionState);
+        console.log("Connection State:", peerConnection.connectionState);
         if (peerConnection.connectionState === "failed") {
-          console.error("WebRTC connection failed");
+          setError("Connection failed. Please try again.");
         }
       };
 
+      peerConnection.oniceconnectionstatechange = () => {
+        console.log("ICE Connection State:", peerConnection.iceConnectionState);
+      };
+
+      console.log("=== WEBRTC INITIALIZED ===");
       return peerConnection;
     } catch (error) {
-      console.error("Error accessing media devices:", error);
+      console.error("Error in initializeWebRTC:", error);
 
       let errorMessage = "Unknown error";
 
@@ -391,6 +460,8 @@ function App() {
         errorMessage = "Camera/microphone is already being used by another application.";
       } else if (error.name === "NotSupportedError") {
         errorMessage = "WebRTC is not supported. Use HTTPS or a supported browser.";
+      } else if (error.message) {
+        errorMessage = error.message;
       }
 
       setError(`Video call error: ${errorMessage}`);
@@ -400,66 +471,151 @@ function App() {
 
   const startCall = async (targetUser) => {
     try {
+      console.log("=== START CALL INITIATED ===");
+      console.log("Target user:", targetUser);
+      
+      setCurrentCallTarget(targetUser);
+      setIsCallActive(true);
+      setCallDialogOpen(true);
+      
+      console.log("Dialog opened, waiting for render...");
+      // Wait longer for dialog to render
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      console.log("Checking video refs after dialog open:");
+      console.log("- localVideoRef.current exists:", !!localVideoRef.current);
+      console.log("- remoteVideoRef.current exists:", !!remoteVideoRef.current);
+      
       const peerConnection = await initializeWebRTC();
+      
       if (peerConnection && socket) {
-        const offer = await peerConnection.createOffer();
+        console.log("Creating offer...");
+        const offer = await peerConnection.createOffer({
+          offerToReceiveAudio: true,
+          offerToReceiveVideo: true
+        });
         await peerConnection.setLocalDescription(offer);
 
+        console.log("Offer created, sending to", targetUser);
+        console.log("Offer has video:", offer.sdp.includes('m=video'));
+        console.log("Offer has audio:", offer.sdp.includes('m=audio'));
+        
         socket.emit("call-offer", {
           target: targetUser,
           offer: offer,
         });
-
-        setIsCallActive(true);
-        setCallDialogOpen(true);
+        console.log("=== CALL OFFER SENT ===");
       }
     } catch (error) {
       console.error("Failed to start call:", error);
-      setError("Failed to start video call");
+      setError("Failed to start video call: " + error.message);
+      handleCallEnd();
     }
   };
 
   const handleCallOffer = async (data) => {
+    console.log("Received call offer from", data.from);
     setIncomingCall(data);
+    setCurrentCallTarget(data.from);
   };
 
   const acceptCall = async () => {
     try {
+      console.log("=== ACCEPT CALL INITIATED ===");
+      console.log("Accepting call from", incomingCall.from);
+      
+      const callData = incomingCall;
+      setIncomingCall(null);
+      setIsCallActive(true);
+      setCallDialogOpen(true);
+      
+      console.log("Dialog opened, waiting for render...");
+      // Wait longer for dialog to render
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      console.log("Checking video refs after dialog open:");
+      console.log("- localVideoRef.current exists:", !!localVideoRef.current);
+      console.log("- remoteVideoRef.current exists:", !!remoteVideoRef.current);
+      
       const peerConnection = await initializeWebRTC();
-      if (peerConnection && socket && incomingCall) {
-        await peerConnection.setRemoteDescription(incomingCall.offer);
+      
+      if (peerConnection && socket && callData) {
+        console.log("Setting remote description from offer...");
+        await peerConnection.setRemoteDescription(
+          new RTCSessionDescription(callData.offer)
+        );
+        console.log("Remote description set");
+        
+        console.log("Creating answer...");
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
+        console.log("Answer created, sending to", callData.from);
+        console.log("Answer has video:", answer.sdp.includes('m=video'));
+        console.log("Answer has audio:", answer.sdp.includes('m=audio'));
+        
         socket.emit("call-answer", {
-          target: incomingCall.from,
+          target: callData.from,
           answer: answer,
         });
+        console.log("=== CALL ANSWER SENT ===");
 
-        setIsCallActive(true);
-        setCallDialogOpen(true);
-        setIncomingCall(null);
+        // Process pending ICE candidates
+        if (pendingIceCandidatesRef.current.length > 0) {
+          console.log("Processing", pendingIceCandidatesRef.current.length, "pending ICE candidates");
+          for (const candidate of pendingIceCandidatesRef.current) {
+            try {
+              await peerConnection.addIceCandidate(candidate);
+            } catch (e) {
+              console.warn("Error adding queued ICE candidate:", e);
+            }
+          }
+          pendingIceCandidatesRef.current = [];
+        }
       }
     } catch (error) {
       console.error("Failed to accept call:", error);
-      setError("Failed to accept video call");
+      setError("Failed to accept video call: " + error.message);
+      handleCallEnd();
     }
   };
 
   const handleCallAnswer = async (data) => {
     try {
+      console.log("Received call answer from", data.from);
       if (peerConnectionRef.current) {
-        await peerConnectionRef.current.setRemoteDescription(data.answer);
+        await peerConnectionRef.current.setRemoteDescription(
+          new RTCSessionDescription(data.answer)
+        );
+        
+        // Process pending ICE candidates
+        if (pendingIceCandidatesRef.current.length > 0) {
+          console.log("Processing pending ICE candidates");
+          for (const candidate of pendingIceCandidatesRef.current) {
+            try {
+              await peerConnectionRef.current.addIceCandidate(candidate);
+            } catch (e) {
+              console.warn("Error adding queued ICE candidate:", e);
+            }
+          }
+          pendingIceCandidatesRef.current = [];
+        }
       }
     } catch (error) {
       console.error("Failed to handle call answer:", error);
     }
   };
 
-  const handleIceCandidate = async (candidate) => {
+  const handleIceCandidate = async (data) => {
     try {
-      if (peerConnectionRef.current) {
+      console.log("Received ICE candidate");
+      const candidate = data.candidate;
+      
+      if (peerConnectionRef.current && peerConnectionRef.current.remoteDescription) {
         await peerConnectionRef.current.addIceCandidate(candidate);
+      } else {
+        console.log("Queuing ICE candidate");
+        pendingIceCandidatesRef.current.push(candidate);
       }
     } catch (error) {
       console.error("Failed to handle ICE candidate:", error);
@@ -467,13 +623,15 @@ function App() {
   };
 
   const endCall = () => {
-    if (socket) {
-      socket.emit("call-end");
+    if (socket && currentCallTarget) {
+      socket.emit("call-end", { target: currentCallTarget });
     }
     handleCallEnd();
   };
 
   const handleCallEnd = () => {
+    console.log("Ending call");
+    
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
@@ -484,9 +642,20 @@ function App() {
       localStreamRef.current = null;
     }
 
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
+
     setIsCallActive(false);
     setCallDialogOpen(false);
     setIncomingCall(null);
+    setCurrentCallTarget(null);
+    setIsMuted(false);
+    setIsVideoEnabled(true);
+    pendingIceCandidatesRef.current = [];
   };
 
   const toggleMute = () => {
@@ -514,11 +683,13 @@ function App() {
     loadOnlineUsers();
   };
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
+      }
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
       }
     };
   }, []);
@@ -584,7 +755,6 @@ function App() {
         )}
         
         <Box display="flex" gap={2}>
-          {/* Online Users */}
           <Paper style={{ width: "250px", padding: "15px" }}>
             <Typography variant="h6" gutterBottom>
               Online Users ({onlineUsers.length})
@@ -614,7 +784,6 @@ function App() {
             </List>
           </Paper>
 
-          {/* Chat Area */}
           <Paper style={{ flexGrow: 1, padding: "15px" }}>
             <Box
               height="400px"
@@ -643,7 +812,6 @@ function App() {
                 </Box>
               ))}
               
-              {/* Typing indicators */}
               {typingUsers.length > 0 && (
                 <Box marginBottom="10px">
                   <Typography variant="caption" color="textSecondary" fontStyle="italic">
@@ -685,7 +853,6 @@ function App() {
         </Box>
       </Container>
 
-      {/* Incoming Call Dialog */}
       <Dialog open={!!incomingCall}>
         <DialogTitle>Incoming Call</DialogTitle>
         <DialogContent>
@@ -701,14 +868,13 @@ function App() {
         </DialogActions>
       </Dialog>
 
-      {/* Video Call Dialog */}
       <Dialog
         open={callDialogOpen}
         maxWidth="md"
         fullWidth
         onClose={() => !isCallActive && setCallDialogOpen(false)}
       >
-        <DialogTitle>Video Call</DialogTitle>
+        <DialogTitle>Video Call {currentCallTarget && `with ${currentCallTarget}`}</DialogTitle>
         <DialogContent>
           <Box display="flex" gap={2} justifyContent="center">
             <Box textAlign="center">
@@ -716,6 +882,7 @@ function App() {
               <video
                 ref={localVideoRef}
                 autoPlay
+                playsInline
                 muted
                 style={{
                   width: "300px",
@@ -730,6 +897,7 @@ function App() {
               <video
                 ref={remoteVideoRef}
                 autoPlay
+                playsInline
                 style={{
                   width: "300px",
                   height: "200px",
