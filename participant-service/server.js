@@ -184,9 +184,9 @@ app.post("/api/participants", async (req, res, next) => {
       });
       await user.save();
     }
-    // Log the action to RabbitMQ
+    // Log the action to RabbitMQ (only for logging, not for chat messages)
     await logAction("user_joined", trimmedUsername);
-    await sendUserAction("User joined: " + trimmedUsername, "SYSTEM");
+    // Note: Don't send to user_actions here - the chat service will handle it via WebSocket
     res.status(200).json({
       message: "User joined successfully",
       user: {
@@ -243,9 +243,9 @@ app.post("/api/participants/join", async (req, res, next) => {
       });
       await user.save();
     }
-    // Log the action to RabbitMQ
+    // Log the action to RabbitMQ (only for logging, not for chat messages)
     await logAction("user_joined", trimmedUsername);
-    await sendUserAction("User joined: " + trimmedUsername, "SYSTEM");
+    // Note: Don't send to user_actions here - the chat service will handle it via WebSocket
     res.status(200).json({
       message: "User joined successfully",
       user: {

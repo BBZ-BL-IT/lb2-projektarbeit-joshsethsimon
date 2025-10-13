@@ -235,6 +235,24 @@ io.on("connection", (socket) => {
         console.error('Error fetching message history:', error);
       }
       
+      // Send user joined message to RabbitMQ queue to appear in chat
+      if (channel) {
+        try {
+          await channel.sendToQueue(
+            "user_actions",
+            Buffer.from(JSON.stringify({
+              message: `User joined: ${username}`,
+              username: "SYSTEM",
+              timestamp: new Date(),
+              room: 'general',
+            })),
+            { persistent: true }
+          );
+        } catch (error) {
+          console.error("Error sending user joined message to RabbitMQ:", error);
+        }
+      }
+      
       // Log the join action
       logAction("user_joined", username);
       
@@ -408,50 +426,54 @@ io.on("connection", (socket) => {
   socket.on("disconnect", async () => {
     const username = connectedUsers.get(socket.id);
     
-    if (username) {
-      connectedUsers.delete(socket.id);
-      userSocketMap.delete(username);
-      
-      // Update user status in database
-      try {
-        await User.findOneAndUpdate(
-          { username },
-          { isOnline: false, lastSeen: new Date() }
-        );
-      } catch (error) {
-        console.error("Error updating user status on disconnect:", error);
-      }
-      
-      // Clean up any ongoing calls
-      let callIdToRemove = null;
-      let targetSocketId = null;
-      
-      for (const [callId, session] of callSessions.entries()) {
-        if (session.callerSocketId === socket.id || session.calleeSocketId === socket.id) {
-          targetSocketId = session.callerSocketId === socket.id ? 
-            session.calleeSocketId : session.callerSocketId;
-          callIdToRemove = callId;
-          break;
-        }
-      }
-      
-      if (targetSocketId) {
-        io.to(targetSocketId).emit('call-end');
-      }
-      
-      if (callIdToRemove) {
-        callSessions.delete(callIdToRemove);
-      }
-      
-      // Broadcast updated user list
-      const onlineUsers = Array.from(connectedUsers.values());
-      io.emit('users', onlineUsers);
-      
-      // Log the disconnect action
-      logAction("user_left", username);
-      
-      console.log(`${username} disconnected`);
+    // Check if user exists to prevent duplicate disconnect handling
+    if (!username) {
+      return;
     }
+    
+    // Remove user from connected users immediately to prevent duplicate processing
+    connectedUsers.delete(socket.id);
+    userSocketMap.delete(username);
+    
+    // Update user status in database
+    try {
+      await User.findOneAndUpdate(
+        { username },
+        { isOnline: false, lastSeen: new Date() }
+      );
+    } catch (error) {
+      console.error("Error updating user status on disconnect:", error);
+    }
+    
+    // Clean up any ongoing calls
+    let callIdToRemove = null;
+    let targetSocketId = null;
+    
+    for (const [callId, session] of callSessions.entries()) {
+      if (session.callerSocketId === socket.id || session.calleeSocketId === socket.id) {
+        targetSocketId = session.callerSocketId === socket.id ? 
+          session.calleeSocketId : session.callerSocketId;
+        callIdToRemove = callId;
+        break;
+      }
+    }
+    
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('call-end');
+    }
+    
+    if (callIdToRemove) {
+      callSessions.delete(callIdToRemove);
+    }
+    
+    // Broadcast updated user list
+    const onlineUsers = Array.from(connectedUsers.values());
+    io.emit('users', onlineUsers);
+    
+    // Log the disconnect action
+    logAction("user_left", username);
+    
+    console.log(`${username} disconnected`);
   });
 });
 
