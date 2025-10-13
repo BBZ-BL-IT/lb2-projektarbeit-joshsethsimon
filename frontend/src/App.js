@@ -29,6 +29,8 @@ import {
   Refresh,
   BarChart,
   Logout,
+  Menu,
+  Close,
 } from "@mui/icons-material";
 import io from "socket.io-client";
 import axios from "axios";
@@ -50,6 +52,7 @@ function ChatApp() {
   const [error, setError] = useState("");
   const [typingUsers, setTypingUsers] = useState([]);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [isUsersPanelOpen, setIsUsersPanelOpen] = useState(true);
 
   // Video Call States
   const [isCallActive, setIsCallActive] = useState(false);
@@ -947,73 +950,116 @@ function ChatApp() {
         )}
 
         <Box display="flex" gap={3}>
-          {/* Online Users Panel */}
-          <Paper
-            elevation={2}
-            sx={{
-              width: "280px",
-              padding: "20px",
-              borderRadius: "16px",
-              background: "white",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-            }}
-          >
-            <Typography
-              variant="h6"
-              gutterBottom
+          {/* Toggle Button for Users Panel */}
+          {!isUsersPanelOpen && (
+            <IconButton
+              onClick={() => setIsUsersPanelOpen(true)}
               sx={{
-                fontWeight: 600,
-                color: "#667eea",
-                marginBottom: "16px",
+                position: "fixed",
+                left: 20,
+                top: 100,
+                zIndex: 1000,
+                backgroundColor: "#667eea",
+                color: "white",
+                "&:hover": {
+                  backgroundColor: "#5568d3",
+                },
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
               }}
             >
-              🟢 Online Users ({onlineUsers.length})
-            </Typography>
-            <List dense>
-              {onlineUsers.map((user, index) => (
-                <ListItem
-                  key={index}
+              <Menu />
+            </IconButton>
+          )}
+
+          {/* Online Users Panel */}
+          {isUsersPanelOpen && (
+            <Paper
+              elevation={2}
+              sx={{
+                width: "280px",
+                padding: "20px",
+                borderRadius: "16px",
+                background: "white",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                position: "relative",
+              }}
+            >
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "16px",
+                }}
+              >
+                <Typography
+                  variant="h6"
                   sx={{
-                    borderRadius: "8px",
-                    marginBottom: "8px",
+                    fontWeight: 600,
+                    color: "#667eea",
+                  }}
+                >
+                  🟢 Online Users ({onlineUsers.length})
+                </Typography>
+                <IconButton
+                  size="small"
+                  onClick={() => setIsUsersPanelOpen(false)}
+                  sx={{
+                    color: "#667eea",
                     "&:hover": {
-                      background: "#f5f7fa",
+                      backgroundColor: "rgba(102, 126, 234, 0.1)",
                     },
                   }}
                 >
-                  <ListItemText
-                    primary={user}
-                    primaryTypographyProps={{
-                      variant: "body2",
-                      fontWeight: 500,
-                    }}
-                  />
-                  <IconButton
-                    size="small"
-                    onClick={() => startCall(user)}
-                    title="Start Video Call"
+                  <Close />
+                </IconButton>
+              </Box>
+              <List dense>
+                {onlineUsers.map((user, index) => (
+                  <ListItem
+                    key={index}
                     sx={{
-                      color: "#667eea",
+                      borderRadius: "8px",
+                      marginBottom: "8px",
                       "&:hover": {
-                        background: "rgba(102, 126, 234, 0.1)",
+                        background: "#f5f7fa",
                       },
                     }}
                   >
-                    <VideoCall fontSize="small" />
-                  </IconButton>
-                </ListItem>
-              ))}
-              {onlineUsers.length === 0 && (
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ textAlign: "center", padding: "20px" }}
-                >
-                  No other users online
-                </Typography>
-              )}
-            </List>
-          </Paper>
+                    <ListItemText
+                      primary={user}
+                      primaryTypographyProps={{
+                        variant: "body2",
+                        fontWeight: 500,
+                      }}
+                    />
+                    <IconButton
+                      size="small"
+                      onClick={() => startCall(user)}
+                      title="Start Video Call"
+                      sx={{
+                        color: "#667eea",
+                        "&:hover": {
+                          background: "rgba(102, 126, 234, 0.1)",
+                        },
+                      }}
+                    >
+                      <VideoCall fontSize="small" />
+                    </IconButton>
+                  </ListItem>
+                ))}
+                {onlineUsers.length === 0 && (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ textAlign: "center", padding: "20px" }}
+                  >
+                    No other users online
+                  </Typography>
+                )}
+              </List>
+            </Paper>
+          )}
 
           {/* Chat Panel */}
           <Paper
