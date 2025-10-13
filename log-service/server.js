@@ -160,6 +160,33 @@ app.get("/api/logs", async (req, res, next) => {
   }
 });
 
+app.get("/api/logs/stats", async (req, res, next) => {
+  try {
+    const totalLogs = await Log.countDocuments();
+    const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const logsLast24h = await Log.countDocuments({ timestamp: { $gte: last24Hours } });
+    
+    // Get action breakdown
+    const actionBreakdown = await Log.aggregate([
+      { $group: { _id: '$action', count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]);
+
+    res.json({
+      message: "Log statistics retrieved successfully",
+      stats: {
+        totalLogs,
+        logsLast24h,
+        actionBreakdown
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error in /logs/stats endpoint:", error);
+    next(error);
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

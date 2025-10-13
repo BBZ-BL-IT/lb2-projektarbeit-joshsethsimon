@@ -27,13 +27,17 @@ import {
   VideocamOff,
   Send,
   Refresh,
+  BarChart,
 } from "@mui/icons-material";
 import io from "socket.io-client";
 import axios from "axios";
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from "react-router-dom";
+import Statistics from "./Statistics";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 
-function App() {
+function ChatApp() {
+  const navigate = useNavigate();
   const [socket, setSocket] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
@@ -807,6 +811,18 @@ function App() {
           </Typography>
           <IconButton
             color="inherit"
+            onClick={() => navigate('/statistics')}
+            title="View Statistics"
+            sx={{
+              "&:hover": {
+                background: "rgba(255, 255, 255, 0.1)",
+              },
+            }}
+          >
+            <BarChart />
+          </IconButton>
+          <IconButton
+            color="inherit"
             onClick={refreshData}
             title="Refresh"
             sx={{
@@ -1250,6 +1266,17 @@ function App() {
         </DialogActions>
       </Dialog>
     </Box>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<ChatApp />} />
+        <Route path="/statistics" element={<Statistics />} />
+      </Routes>
+    </Router>
   );
 }
 

@@ -617,13 +617,32 @@ app.post("/api/chat/messages", async (req, res) => {
 });
 
 // Get connection stats
-app.get('/api/chat/stats', (req, res) => {
-  res.json({
-    connectedUsers: Array.from(connectedUsers.values()),
-    totalConnections: connectedUsers.size,
-    activeCalls: callSessions.size,
-    timestamp: new Date().toISOString()
-  });
+app.get('/api/chat/stats', async (req, res) => {
+  try {
+    const totalMessages = await Chat.countDocuments();
+    const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const messagesLast24h = await Chat.countDocuments({ timestamp: { $gte: last24Hours } });
+    
+    // Get most active users
+    const mostActiveUsers = await Chat.aggregate([
+      { $group: { _id: '$username', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 5 }
+    ]);
+
+    res.json({
+      connectedUsers: Array.from(connectedUsers.values()),
+      totalConnections: connectedUsers.size,
+      activeCalls: callSessions.size,
+      totalMessages,
+      messagesLast24h,
+      mostActiveUsers,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error fetching chat stats:', error);
+    res.status(500).json({ error: 'Failed to fetch chat statistics' });
+  }
 });
 
 // Get online users
