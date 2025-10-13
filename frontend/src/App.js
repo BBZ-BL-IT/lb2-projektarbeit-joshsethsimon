@@ -28,6 +28,7 @@ import {
   Send,
   Refresh,
   BarChart,
+  Logout,
 } from "@mui/icons-material";
 import io from "socket.io-client";
 import axios from "axios";
@@ -48,6 +49,7 @@ function ChatApp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [typingUsers, setTypingUsers] = useState([]);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   // Video Call States
   const [isCallActive, setIsCallActive] = useState(false);
@@ -73,6 +75,34 @@ function ChatApp() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Check for stored credentials on component mount
+  useEffect(() => {
+    const checkStoredAuth = async () => {
+      const storedUsername = localStorage.getItem('chatUsername');
+      
+      if (storedUsername) {
+        try {
+          // Verify the user still exists and reactivate them
+          await axios.post(`${API_URL}/api/participants`, { 
+            username: storedUsername 
+          });
+          
+          setUsername(storedUsername);
+          setIsLoggedIn(true);
+          setError("");
+        } catch (error) {
+          console.error("Stored login failed:", error);
+          // Clear invalid stored credentials
+          localStorage.removeItem('chatUsername');
+        }
+      }
+      
+      setCheckingAuth(false);
+    };
+
+    checkStoredAuth();
+  }, []);
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -217,6 +247,9 @@ function ChatApp() {
         username: username.trim() 
       });
       
+      // Store credentials in localStorage
+      localStorage.setItem('chatUsername', username.trim());
+      
       setIsLoggedIn(true);
     } catch (error) {
       console.error("Login failed:", error);
@@ -228,6 +261,33 @@ function ChatApp() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogout = async () => {
+    try {
+      if (username) {
+        await axios.post(`${API_URL}/api/participants/leave`, { 
+          username: username.trim() 
+        });
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
+    
+    // Clear stored credentials
+    localStorage.removeItem('chatUsername');
+    
+    // Disconnect socket
+    if (socket) {
+      socket.disconnect();
+    }
+    
+    // Reset state
+    setIsLoggedIn(false);
+    setUsername("");
+    setMessages([]);
+    setOnlineUsers([]);
+    setError("");
   };
 
   const sendMessage = async () => {
@@ -704,6 +764,22 @@ function ChatApp() {
     };
   }, []);
 
+  // Show loading state while checking authentication
+  if (checkingAuth) {
+    return (
+      <Container maxWidth="sm" style={{ marginTop: "50px", textAlign: "center" }}>
+        <Paper elevation={3} style={{ padding: "30px" }}>
+          <Typography variant="h5" gutterBottom>
+            Loading...
+          </Typography>
+          <Typography variant="body2" color="textSecondary">
+            Checking authentication
+          </Typography>
+        </Paper>
+      </Container>
+    );
+  }
+
   if (!isLoggedIn) {
     return (
       <Box
@@ -768,6 +844,13 @@ function ChatApp() {
               error={!!error}
               helperText="3-20 characters, letters/numbers/underscore/hyphen only"
             />
+            <Typography 
+              variant="caption" 
+              color="text.secondary" 
+              sx={{ display: 'block', marginBottom: "16px", textAlign: 'center' }}
+            >
+              💡 Your username will be saved for next time
+            </Typography>
             <Button
               variant="contained"
               onClick={handleLogin}
@@ -832,6 +915,18 @@ function ChatApp() {
             }}
           >
             <Refresh />
+          </IconButton>
+          <IconButton
+            color="inherit"
+            onClick={handleLogout}
+            title="Logout"
+            sx={{
+              "&:hover": {
+                background: "rgba(255, 255, 255, 0.1)",
+              },
+            }}
+          >
+            <Logout />
           </IconButton>
         </Toolbar>
       </AppBar>
