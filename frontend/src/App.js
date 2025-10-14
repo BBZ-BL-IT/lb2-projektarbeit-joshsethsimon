@@ -31,11 +31,13 @@ import {
   Logout,
   Menu,
   Close,
+  History,
 } from "@mui/icons-material";
 import io from "socket.io-client";
 import axios from "axios";
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from "react-router-dom";
 import Statistics from "./Statistics";
+import Logs from "./Logs";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 
@@ -909,6 +911,18 @@ function ChatApp() {
           </IconButton>
           <IconButton
             color="inherit"
+            onClick={() => navigate('/logs')}
+            title="View Logs"
+            sx={{
+              "&:hover": {
+                background: "rgba(255, 255, 255, 0.1)",
+              },
+            }}
+          >
+            <History />
+          </IconButton>
+          <IconButton
+            color="inherit"
             onClick={refreshData}
             title="Refresh"
             sx={{
@@ -1416,6 +1430,7 @@ function App() {
       <Routes>
         <Route path="/" element={<ChatApp />} />
         <Route path="/statistics" element={<Statistics />} />
+        <Route path="/logs" element={<Logs />} />
       </Routes>
     </Router>
   );

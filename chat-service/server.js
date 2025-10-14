@@ -45,6 +45,9 @@ let rabbitConnection = null;
 const connectedUsers = new Map();
 const userSocketMap = new Map();
 
+// Track sockets currently processing disconnect to prevent duplicate handling
+const disconnectingSocketIds = new Set();
+
 // WebRTC signaling data
 const callSessions = new Map();
 
@@ -424,14 +427,26 @@ io.on("connection", (socket) => {
 
   // Handle user disconnection
   socket.on("disconnect", async () => {
-    const username = connectedUsers.get(socket.id);
-    
-    // Check if user exists to prevent duplicate disconnect handling
-    if (!username) {
+    // Prevent duplicate disconnect processing
+    if (disconnectingSocketIds.has(socket.id)) {
+      console.log(`Disconnect already in progress for socket ${socket.id} - ignoring duplicate event`);
       return;
     }
     
-    // Remove user from connected users immediately to prevent duplicate processing
+    const username = connectedUsers.get(socket.id);
+    
+    // Check if user exists to prevent disconnect handling for sockets that never joined
+    if (!username) {
+      console.log(`Disconnect event for socket ${socket.id} - no username found (never joined)`);
+      return;
+    }
+    
+    console.log(`Processing disconnect for ${username} (socket: ${socket.id})`);
+    
+    // Mark this socket as disconnecting to prevent duplicate processing
+    disconnectingSocketIds.add(socket.id);
+    
+    // Remove user from connected users immediately
     connectedUsers.delete(socket.id);
     userSocketMap.delete(username);
     
@@ -471,9 +486,13 @@ io.on("connection", (socket) => {
     io.emit('users', onlineUsers);
     
     // Log the disconnect action
+    console.log(`Logging user_left action for ${username}`);
     logAction("user_left", username);
     
-    console.log(`${username} disconnected`);
+    console.log(`${username} disconnected - processing complete`);
+    
+    // Clean up the disconnecting flag after processing
+    disconnectingSocketIds.delete(socket.id);
   });
 });
 

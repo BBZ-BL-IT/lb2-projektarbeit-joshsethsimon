@@ -140,22 +140,30 @@ app.get("/health", async (req, res) => {
 // Log Routes
 app.get("/api/logs", async (req, res, next) => {
   try {
+    console.log("GET /api/logs - Request received");
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
+    console.log(`Fetching logs: page=${page}, limit=${limit}, skip=${skip}`);
 
     const logs = await Log.find().skip(skip).limit(limit).sort({
       timestamp: -1,
     });
     const totalLogs = await Log.countDocuments();
+    
+    console.log(`Found ${logs.length} logs out of ${totalLogs} total`);
+    console.log("Sending response:", { page, limit, total: totalLogs, logsCount: logs.length });
 
-    res.json({
+    const response = {
       page,
       limit,
       total: totalLogs,
       logs,
-    });
+    };
+    
+    res.json(response);
   } catch (error) {
+    console.error("Error in GET /api/logs:", error);
     next(error); // Pass the error to the error handling middleware
   }
 });
