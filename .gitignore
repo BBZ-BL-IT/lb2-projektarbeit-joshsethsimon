@@ -2,3 +2,19 @@
 **/node_modules/
 **/build/
 **.DS_Store
+
+# Production Environment Files
+.env
+.env.production
+.credentials
+*.env.local
+*.env.*.local
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+
+# Caddy logs
+proxy/caddy_data/
+proxy/caddy_config/
