@@ -734,6 +734,8 @@ io.on("connection", (socket) => {
 
     // Clean up the disconnecting flag after processing
     disconnectingSocketIds.delete(socket.id);
+  });
+
 });
 
 // Routes
