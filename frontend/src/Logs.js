@@ -19,6 +19,13 @@ import {
   Button,
   Chip,
   TablePagination,
+  Collapse,
+  Tooltip,
+  TextField,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
 } from "@mui/material";
 import {
   Refresh,
@@ -26,6 +33,14 @@ import {
   History,
   FilterList,
   AccessTime,
+  ExpandMore,
+  ExpandLess,
+  Phone,
+  Chat,
+  Wifi,
+  Error as ErrorIcon,
+  CheckCircle,
+  Info,
 } from "@mui/icons-material";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
@@ -38,18 +53,77 @@ const formatTimestamp = (timestamp) => {
   return date.toLocaleString();
 };
 
-// Function to get action color
-const getActionColor = (action) => {
+// Function to get action color based on event type
+const getActionColor = (action, eventType) => {
+  const event = action || eventType;
   const colorMap = {
+    // WebSocket events
+    connection: "info",
+    user_join: "success",
     user_joined: "success",
+    user_disconnected: "error",
     user_left: "error",
+    typing_start: "default",
+    
+    // Chat events
     message_sent: "primary",
-    call_started: "info",
+    
+    // WebRTC call events
+    call_initiated: "info",
+    call_answered: "success",
     call_ended: "warning",
+    call_disconnected: "error",
+    call_failed: "error",
+    ice_candidate_exchange: "default",
+    
+    // TURN/STUN events
+    connection_established: "success",
+    turn_allocation_created: "info",
+    turn_channel_bind: "default",
+    turn_permission_created: "default",
+    connection_closed: "warning",
+    stun_binding_request: "info",
+    turn_error: "error",
+    turn_refresh: "default",
+    data_transfer: "default",
+    
+    // System
+    service_started: "success",
     login: "success",
     logout: "default",
   };
-  return colorMap[action] || "default";
+  return colorMap[event] || "default";
+};
+
+// Function to get category icon
+const getCategoryIcon = (category, action, eventType) => {
+  const cat = category || (action && action.includes('call') ? 'webrtc' : 'websocket');
+  
+  switch (cat) {
+    case 'webrtc':
+      return <Phone fontSize="small" />;
+    case 'websocket':
+      return <Wifi fontSize="small" />;
+    case 'system':
+      return <Info fontSize="small" />;
+    default:
+      if (eventType?.includes('error')) {
+        return <ErrorIcon fontSize="small" />;
+      }
+      return <Chat fontSize="small" />;
+  }
+};
+
+// Function to get service badge color
+const getServiceColor = (service) => {
+  const colorMap = {
+    'chat-service': 'primary',
+    'stun-turn-service': 'secondary',
+    'log-service': 'default',
+    'participant-service': 'info',
+    'webrtc-system': 'warning',
+  };
+  return colorMap[service] || 'default';
 };
 
 function Logs() {
@@ -61,18 +135,29 @@ function Logs() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(20);
   const [totalLogs, setTotalLogs] = useState(0);
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [filterService, setFilterService] = useState("all");
 
   const loadLogs = async (currentPage = page + 1, limit = rowsPerPage) => {
     setLoading(true);
     setError("");
 
     try {
-      // For testing: Load logs first
-      const logsRes = await axios.get(`${API_URL}/api/logs?page=${currentPage}&limit=${limit}`);
-      console.log("Logs Response Full:", logsRes);
-      console.log("Logs Response Data:", logsRes.data);
-      console.log("Logs Response Data Type:", typeof logsRes.data);
-      console.log("Logs Response Data.logs:", logsRes.data?.logs);
+      // Build query params
+      let queryParams = `page=${currentPage}&limit=${limit}`;
+      
+      if (filterCategory !== "all") {
+        queryParams += `&category=${filterCategory}`;
+      }
+      
+      if (filterService !== "all") {
+        queryParams += `&service=${filterService}`;
+      }
+      
+      // Load logs
+      const logsRes = await axios.get(`${API_URL}/api/logs?${queryParams}`);
+      console.log("Logs Response:", logsRes.data);
       
       // Check if response is valid
       if (logsRes.data) {
@@ -122,7 +207,7 @@ function Logs() {
 
   useEffect(() => {
     loadLogs(1, rowsPerPage);
-  }, []);
+  }, [filterCategory, filterService]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -138,6 +223,32 @@ function Logs() {
 
   const handleRefresh = () => {
     loadLogs(page + 1, rowsPerPage);
+  };
+
+  const handleExpandRow = (logId) => {
+    setExpandedRow(expandedRow === logId ? null : logId);
+  };
+
+  const renderDetails = (log) => {
+    if (!log.details || Object.keys(log.details).length === 0) {
+      return <Typography variant="caption" color="textSecondary">No additional details</Typography>;
+    }
+
+    return (
+      <Box>
+        <Typography variant="subtitle2" gutterBottom>Details:</Typography>
+        <Box component="pre" sx={{ 
+          backgroundColor: '#f5f5f5', 
+          padding: 1, 
+          borderRadius: 1,
+          fontSize: '0.75rem',
+          overflow: 'auto',
+          maxHeight: '200px'
+        }}>
+          {JSON.stringify(log.details, null, 2)}
+        </Box>
+      </Box>
+    );
   };
 
   if (loading && logs.length === 0) {
@@ -176,6 +287,63 @@ function Logs() {
           {error}
         </Alert>
       )}
+
+      {/* Filters */}
+      <Paper style={{ padding: "20px", marginBottom: "20px" }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={4}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Category</InputLabel>
+              <Select
+                value={filterCategory}
+                label="Category"
+                onChange={(e) => {
+                  setFilterCategory(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <MenuItem value="all">All Categories</MenuItem>
+                <MenuItem value="websocket">WebSocket</MenuItem>
+                <MenuItem value="webrtc">WebRTC</MenuItem>
+                <MenuItem value="system">System</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Service</InputLabel>
+              <Select
+                value={filterService}
+                label="Service"
+                onChange={(e) => {
+                  setFilterService(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <MenuItem value="all">All Services</MenuItem>
+                <MenuItem value="chat-service">Chat Service</MenuItem>
+                <MenuItem value="stun-turn-service">STUN/TURN Service</MenuItem>
+                <MenuItem value="log-service">Log Service</MenuItem>
+                <MenuItem value="participant-service">Participant Service</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid item xs={12} sm={4}>
+            <Button
+              variant="outlined"
+              startIcon={<FilterList />}
+              onClick={() => {
+                setFilterCategory("all");
+                setFilterService("all");
+                setPage(0);
+              }}
+              fullWidth
+            >
+              Clear Filters
+            </Button>
+          </Grid>
+        </Grid>
+      </Paper>
 
       {/* Statistics Cards */}
       <Grid container spacing={3} style={{ marginBottom: "30px" }}>
@@ -252,8 +420,8 @@ function Logs() {
                       <TableRow key={action._id}>
                         <TableCell>
                           <Chip
-                            label={action._id}
-                            color={getActionColor(action._id)}
+                            label={action._id || 'unknown'}
+                            color={getActionColor(action._id, action._id)}
                             size="small"
                           />
                         </TableCell>
@@ -302,37 +470,83 @@ function Logs() {
           <Table>
             <TableHead>
               <TableRow>
+                <TableCell width="30px"></TableCell>
                 <TableCell><strong>Timestamp</strong></TableCell>
-                <TableCell><strong>Action</strong></TableCell>
+                <TableCell><strong>Event</strong></TableCell>
+                <TableCell><strong>Category</strong></TableCell>
+                <TableCell><strong>Service</strong></TableCell>
                 <TableCell><strong>Username</strong></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {logs && logs.length > 0 ? (
-                logs.map((log) => (
-                  <TableRow key={log._id} hover>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {formatTimestamp(log.timestamp)}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={log.action}
-                        color={getActionColor(log.action)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2">
-                        {log.username}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ))
+                logs.map((log) => {
+                  const eventName = log.eventType || log.action || 'unknown';
+                  const isExpanded = expandedRow === log._id;
+                  
+                  return (
+                    <React.Fragment key={log._id}>
+                      <TableRow hover onClick={() => handleExpandRow(log._id)} style={{ cursor: 'pointer' }}>
+                        <TableCell>
+                          <IconButton size="small">
+                            {isExpanded ? <ExpandLess /> : <ExpandMore />}
+                          </IconButton>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {formatTimestamp(log.timestamp)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Box display="flex" alignItems="center" gap={1}>
+                            {getCategoryIcon(log.category, log.action, log.eventType)}
+                            <Chip
+                              label={eventName}
+                              color={getActionColor(log.action, log.eventType)}
+                              size="small"
+                            />
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          {log.category && (
+                            <Chip 
+                              label={log.category} 
+                              size="small" 
+                              variant="outlined"
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {log.service && (
+                            <Chip 
+                              label={log.service} 
+                              color={getServiceColor(log.service)}
+                              size="small" 
+                              variant="outlined"
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {log.username || '-'}
+                          </Typography>
+                        </TableCell>
+                      </TableRow>
+                      <TableRow>
+                        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
+                          <Collapse in={isExpanded} timeout="auto" unmountOnExit>
+                            <Box margin={2}>
+                              {renderDetails(log)}
+                            </Box>
+                          </Collapse>
+                        </TableCell>
+                      </TableRow>
+                    </React.Fragment>
+                  );
+                })
               ) : (
                 <TableRow>
-                  <TableCell colSpan={3} align="center">
+                  <TableCell colSpan={6} align="center">
                     <Typography variant="body2" color="textSecondary">
                       No logs found
                     </Typography>

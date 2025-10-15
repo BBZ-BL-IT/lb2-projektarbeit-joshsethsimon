@@ -195,6 +195,24 @@ app.get("/api/logs/stats", async (req, res, next) => {
   }
 });
 
+// Clear all logs
+app.delete("/api/logs", async (req, res, next) => {
+  try {
+    const result = await Log.deleteMany({});
+    
+    console.log(`All logs cleared: ${result.deletedCount} logs deleted`);
+    
+    res.json({
+      message: "All logs cleared successfully",
+      deletedCount: result.deletedCount,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error clearing logs:", error);
+    next(error);
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);

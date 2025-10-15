@@ -48,6 +48,7 @@ import {
 } from "react-router-dom";
 import Statistics from "./Statistics";
 import Logs from "./Logs";
+import TurnStats from "./TurnStats";
 import { getWebRTCConfig, isTurnServiceAvailable } from "./utils/webrtc-helper";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
@@ -208,6 +209,10 @@ function ChatApp() {
           setMessages((prev) =>
             prev.filter((msg) => msg._id !== data.messageId),
           );
+        });
+
+        newSocket.on("chat-cleared", () => {
+          setMessages([]);
         });
 
         newSocket.on("error", (data) => {
@@ -980,8 +985,8 @@ function ChatApp() {
           <Tooltip
             title={
               turnServiceAvailable
-                ? "STUN/TURN server active - Enhanced WebRTC connectivity"
-                : "Using fallback public STUN servers"
+                ? "STUN/TURN server active - Click to view stats"
+                : "Using fallback public STUN servers - Click to view stats"
             }
             arrow
           >
@@ -990,9 +995,14 @@ function ChatApp() {
               label={turnServiceAvailable ? "TURN Active" : "Fallback STUN"}
               size="small"
               color={turnServiceAvailable ? "success" : "warning"}
+              onClick={() => navigate("/turn-stats")}
               sx={{
                 marginRight: 2,
                 fontWeight: 500,
+                cursor: "pointer",
+                "&:hover": {
+                  opacity: 0.8,
+                },
                 "& .MuiChip-icon": {
                   color: "inherit",
                 },
@@ -1544,6 +1554,7 @@ function App() {
         <Route path="/" element={<ChatApp />} />
         <Route path="/statistics" element={<Statistics />} />
         <Route path="/logs" element={<Logs />} />
+        <Route path="/turn-stats" element={<TurnStats />} />
       </Routes>
     </Router>
   );

@@ -184,7 +184,16 @@ async function setupRabbitMQConsumer() {
 
 // Helper functions
 const logAction = async (action, username, details = {}) => {
-  const logEntry = { action, username, details, timestamp: new Date() };
+  const logEntry = { 
+    action, 
+    username, 
+    details, 
+    timestamp: new Date(),
+    service: 'chat-service'
+  };
+  
+  console.log(`[LOG] ${action} - ${username}:`, details);
+  
   try {
     if (channel) {
       await channel.sendToQueue("logs", Buffer.from(JSON.stringify(logEntry)), {
@@ -196,9 +205,62 @@ const logAction = async (action, username, details = {}) => {
   }
 };
 
+// WebRTC-specific logging
+const logWebRTCEvent = async (eventType, username, details = {}) => {
+  const logEntry = {
+    eventType,
+    username,
+    details,
+    timestamp: new Date(),
+    service: 'chat-service',
+    category: 'webrtc'
+  };
+  
+  console.log(`[WebRTC] ${eventType} - ${username}:`, details);
+  
+  try {
+    if (channel) {
+      await channel.sendToQueue("webrtc_events", Buffer.from(JSON.stringify(logEntry)), {
+        persistent: true,
+      });
+      await channel.sendToQueue("logs", Buffer.from(JSON.stringify(logEntry)), {
+        persistent: true,
+      });
+    }
+  } catch (error) {
+    console.error("Error logging WebRTC event to RabbitMQ:", error);
+  }
+};
+
+// WebSocket-specific logging
+const logWSEvent = async (eventType, username, details = {}) => {
+  const logEntry = {
+    eventType,
+    username,
+    details,
+    timestamp: new Date(),
+    service: 'chat-service',
+    category: 'websocket'
+  };
+  
+  console.log(`[WebSocket] ${eventType} - ${username}:`, details);
+  
+  try {
+    if (channel) {
+      await channel.sendToQueue("logs", Buffer.from(JSON.stringify(logEntry)), {
+        persistent: true,
+      });
+    }
+  } catch (error) {
+    console.error("Error logging WebSocket event to RabbitMQ:", error);
+  }
+};
+
 // WebSocket Connection Handling
 io.on("connection", (socket) => {
-  console.log(`User connected: ${socket.id}`);
+  console.log(`[WebSocket] User connected: ${socket.id}`);
+  
+  logWSEvent('connection', 'unknown', { socketId: socket.id });
   
   // Handle user joining
   socket.on("join", async (data) => {
@@ -210,6 +272,12 @@ io.on("connection", (socket) => {
       userSocketMap.set(username, socket.id);
       
       socket.join('general');
+      
+      // Log join event
+      await logWSEvent('user_join', username, { 
+        socketId: socket.id,
+        room: 'general'
+      });
       
       // Update user status in database
       try {
@@ -284,12 +352,75 @@ io.on("connection", (socket) => {
         return;
       }
 
+      const trimmedMessage = message.trim();
+
+      // Check for /clearchat command
+      if (trimmedMessage === '/clearchat') {
+        try {
+          const result = await Chat.deleteMany({});
+          
+          // Notify all clients that chat was cleared
+          io.emit("chat-cleared");
+          
+          // Send system message
+          io.emit("message", {
+            _id: Date.now(),
+            message: `Chat cleared by ${username} (${result.deletedCount} messages deleted)`,
+            username: "SYSTEM",
+            timestamp: new Date(),
+            room: 'general',
+          });
+          
+          // Log the clear action
+          logAction("chat_cleared", username, { deletedCount: result.deletedCount });
+          
+          console.log(`Chat cleared by ${username}: ${result.deletedCount} messages deleted`);
+        } catch (error) {
+          console.error("Error clearing chat:", error);
+          socket.emit("error", { message: "Failed to clear chat" });
+        }
+        return;
+      }
+
+      // Check for /clearlogs command
+      if (trimmedMessage === '/clearlogs') {
+        try {
+          // Send request to log service via RabbitMQ or HTTP
+          const axios = require('axios');
+          const LOG_SERVICE_URL = process.env.LOG_SERVICE_URL || 'http://log-service:8004';
+          
+          try {
+            await axios.delete(`${LOG_SERVICE_URL}/api/logs`);
+          } catch (httpError) {
+            console.error("Failed to clear logs via HTTP, trying RabbitMQ:", httpError);
+          }
+          
+          // Send system message
+          io.emit("message", {
+            _id: Date.now(),
+            message: `Logs cleared by ${username}`,
+            username: "SYSTEM",
+            timestamp: new Date(),
+            room: 'general',
+          });
+          
+          // Log the clear action
+          logAction("logs_cleared", username);
+          
+          console.log(`Logs cleared by ${username}`);
+        } catch (error) {
+          console.error("Error clearing logs:", error);
+          socket.emit("error", { message: "Failed to clear logs" });
+        }
+        return;
+      }
+
       // Send message to RabbitMQ queue for processing
       if (channel) {
         await channel.sendToQueue(
           "user_actions",
           Buffer.from(JSON.stringify({
-            message: message.trim(),
+            message: trimmedMessage,
             username: username.trim(),
             timestamp: timestamp || new Date(),
             room: 'general',
@@ -299,7 +430,7 @@ io.on("connection", (socket) => {
       } else {
         // Fallback: save directly to database if RabbitMQ is not available
         const chat = new Chat({
-          message: message.trim(),
+          message: trimmedMessage,
           username: username.trim(),
           timestamp: timestamp || new Date(),
           room: 'general',
@@ -318,13 +449,28 @@ io.on("connection", (socket) => {
       }
 
       // Log the message action
-      logAction("message_sent", username);
+      logAction("message_sent", username, { 
+        messageLength: trimmedMessage.length,
+        room: 'general'
+      });
       
-      console.log(`Message from ${username}: ${message}`);
+      console.log(`[Message] ${username}: ${message.substring(0, 50)}${message.length > 50 ? '...' : ''}`);
       
     } catch (error) {
       console.error("Error handling message:", error);
       socket.emit("error", { message: "Failed to send message" });
+    }
+  });
+
+  // Handle typing indicators
+  socket.on('typing', (data) => {
+    socket.broadcast.emit('user-typing', {
+      username: socket.username,
+      isTyping: data.isTyping
+    });
+    
+    if (data.isTyping) {
+      logWSEvent('typing_start', socket.username, { room: 'general' });
     }
   });
 
@@ -336,12 +482,13 @@ io.on("connection", (socket) => {
     const targetSocketId = userSocketMap.get(target);
     
     if (targetSocketId) {
-      const callId = `${socket.username}-${target}`;
+      const callId = `${socket.username}-${target}-${Date.now()}`;
       callSessions.set(callId, {
         caller: socket.username,
         callee: target,
         callerSocketId: socket.id,
-        calleeSocketId: targetSocketId
+        calleeSocketId: targetSocketId,
+        startTime: new Date()
       });
       
       io.to(targetSocketId).emit('call-offer', {
@@ -349,12 +496,103 @@ io.on("connection", (socket) => {
         offer: offer
       });
       
-      console.log(`Call offer from ${socket.username} to ${target}`);
+      // Log call initiation
+      logWebRTCEvent('call_initiated', socket.username, {
+        target,
+        callId,
+        offerType: offer?.type || 'unknown'
+      });
+      
+      console.log(`[Call] Offer from ${socket.username} to ${target} - CallID: ${callId}`);
+    } else {
+      // Log failed call attempt
+      logWebRTCEvent('call_failed', socket.username, {
+        target,
+        reason: 'target_not_found'
+      });
     }
   });
 
   // Handle call answer
   socket.on('call-answer', (data) => {
+    const { target, answer } = data;
+    const targetSocketId = userSocketMap.get(target);
+    
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('call-answer', {
+        from: socket.username,
+        answer: answer
+      });
+      
+      // Log call answer
+      logWebRTCEvent('call_answered', socket.username, {
+        caller: target,
+        answerType: answer?.type || 'unknown'
+      });
+      
+      console.log(`[Call] Answer from ${socket.username} to ${target}`);
+    }
+  });
+
+  // Handle ICE candidates
+  socket.on('ice-candidate', (data) => {
+    const { target, candidate } = data;
+    const targetSocketId = userSocketMap.get(target);
+    
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('ice-candidate', data);
+      
+      // Log ICE candidate exchange (only log type, not full candidate for brevity)
+      logWebRTCEvent('ice_candidate_exchange', socket.username, {
+        target,
+        candidateType: candidate?.candidate?.includes('typ') ? 
+          candidate.candidate.split('typ ')[1]?.split(' ')[0] : 'unknown'
+      });
+    }
+  });
+
+  // Handle call end
+  socket.on('call-end', () => {
+    // Find and clean up call session
+    let targetSocketId = null;
+    let callIdToRemove = null;
+    let session = null;
+    
+    for (const [callId, s] of callSessions.entries()) {
+      if (s.callerSocketId === socket.id) {
+        targetSocketId = s.calleeSocketId;
+        callIdToRemove = callId;
+        session = s;
+        break;
+      } else if (s.calleeSocketId === socket.id) {
+        targetSocketId = s.callerSocketId;
+        callIdToRemove = callId;
+        session = s;
+        break;
+      }
+    }
+    
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('call-end');
+    }
+    
+    if (callIdToRemove && session) {
+      const duration = Date.now() - new Date(session.startTime).getTime();
+      callSessions.delete(callIdToRemove);
+      
+      // Log call end with duration
+      logWebRTCEvent('call_ended', socket.username, {
+        callId: callIdToRemove,
+        caller: session.caller,
+        callee: session.callee,
+        durationMs: duration,
+        durationSec: Math.round(duration / 1000),
+        endedBy: socket.username
+      });
+    }
+    
+    console.log(`[Call] Ended by ${socket.username}`);
+  });
     const { target, answer } = data;
     const targetSocketId = userSocketMap.get(target);
     
@@ -429,7 +667,7 @@ io.on("connection", (socket) => {
   socket.on("disconnect", async () => {
     // Prevent duplicate disconnect processing
     if (disconnectingSocketIds.has(socket.id)) {
-      console.log(`Disconnect already in progress for socket ${socket.id} - ignoring duplicate event`);
+      console.log(`[WebSocket] Disconnect already in progress for socket ${socket.id} - ignoring duplicate`);
       return;
     }
     
@@ -437,11 +675,11 @@ io.on("connection", (socket) => {
     
     // Check if user exists to prevent disconnect handling for sockets that never joined
     if (!username) {
-      console.log(`Disconnect event for socket ${socket.id} - no username found (never joined)`);
+      console.log(`[WebSocket] Disconnect for socket ${socket.id} - no username (never joined)`);
       return;
     }
     
-    console.log(`Processing disconnect for ${username} (socket: ${socket.id})`);
+    console.log(`[WebSocket] Processing disconnect for ${username} (socket: ${socket.id})`);
     
     // Mark this socket as disconnecting to prevent duplicate processing
     disconnectingSocketIds.add(socket.id);
@@ -463,12 +701,14 @@ io.on("connection", (socket) => {
     // Clean up any ongoing calls
     let callIdToRemove = null;
     let targetSocketId = null;
+    let session = null;
     
-    for (const [callId, session] of callSessions.entries()) {
-      if (session.callerSocketId === socket.id || session.calleeSocketId === socket.id) {
-        targetSocketId = session.callerSocketId === socket.id ? 
-          session.calleeSocketId : session.callerSocketId;
+    for (const [callId, s] of callSessions.entries()) {
+      if (s.callerSocketId === socket.id || s.calleeSocketId === socket.id) {
+        targetSocketId = s.callerSocketId === socket.id ? 
+          s.calleeSocketId : s.callerSocketId;
         callIdToRemove = callId;
+        session = s;
         break;
       }
     }
@@ -477,8 +717,19 @@ io.on("connection", (socket) => {
       io.to(targetSocketId).emit('call-end');
     }
     
-    if (callIdToRemove) {
+    if (callIdToRemove && session) {
+      const duration = Date.now() - new Date(session.startTime).getTime();
       callSessions.delete(callIdToRemove);
+      
+      // Log call disconnection
+      logWebRTCEvent('call_disconnected', username, {
+        callId: callIdToRemove,
+        caller: session.caller,
+        callee: session.callee,
+        durationMs: duration,
+        durationSec: Math.round(duration / 1000),
+        reason: 'user_disconnected'
+      });
     }
     
     // Broadcast updated user list
@@ -486,14 +737,15 @@ io.on("connection", (socket) => {
     io.emit('users', onlineUsers);
     
     // Log the disconnect action
-    console.log(`Logging user_left action for ${username}`);
-    logAction("user_left", username);
+    logWSEvent("user_disconnected", username, { 
+      socketId: socket.id,
+      hadActiveCall: !!callIdToRemove
+    });
     
-    console.log(`${username} disconnected - processing complete`);
+    console.log(`[WebSocket] ${username} disconnected - processing complete`);
     
     // Clean up the disconnecting flag after processing
     disconnectingSocketIds.delete(socket.id);
-  });
 });
 
 // Routes

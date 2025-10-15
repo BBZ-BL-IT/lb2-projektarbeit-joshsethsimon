@@ -103,15 +103,29 @@ function parseLogEntry(line) {
     // session 001000000000000001: allocation created
     // session 001000000000000001: closed (2nd stage), user <username> realm <realm> origin <ip:port>
     
+    // New STUN binding request
+    if (line.includes('STUN') && (line.includes('binding') || line.includes('request'))) {
+      const ipMatch = line.match(/from\s+([0-9.]+):(\d+)/);
+      stats.stunRequests++;
+      
+      logEvent('stun_binding_request', {
+        clientIp: ipMatch ? ipMatch[1] : 'unknown',
+        clientPort: ipMatch ? ipMatch[2] : 'unknown',
+        logLine: line.substring(0, 200)
+      });
+    }
+    
     if (line.includes('session') && line.includes('new')) {
       const sessionMatch = line.match(/session\s+(\w+)/);
       const usernameMatch = line.match(/username\s+<([^>]+)>/);
       const ipMatch = line.match(/origin\s+<([^>]+)>/);
+      const realmMatch = line.match(/realm\s+<([^>]+)>/);
       
       if (sessionMatch) {
         const sessionId = sessionMatch[1];
         const username = usernameMatch ? usernameMatch[1] : 'unknown';
         const origin = ipMatch ? ipMatch[1] : 'unknown';
+        const realm = realmMatch ? realmMatch[1] : 'unknown';
         
         stats.totalConnections++;
         stats.activeConnections++;
@@ -119,28 +133,69 @@ function parseLogEntry(line) {
         activeSessions.set(sessionId, {
           username,
           origin,
+          realm,
           startTime: new Date()
         });
         
         logEvent('connection_established', {
           sessionId,
           username,
-          origin
+          origin,
+          realm,
+          timestamp: new Date().toISOString()
         });
+        
+        console.log(`[TURN] New connection - Session: ${sessionId}, User: ${username}, Origin: ${origin}`);
       }
     }
     
     if (line.includes('allocation created')) {
       const sessionMatch = line.match(/session\s+(\w+)/);
+      const ipMatch = line.match(/relayed\s+([0-9.]+):(\d+)/);
+      
       if (sessionMatch) {
         const sessionId = sessionMatch[1];
+        const session = activeSessions.get(sessionId);
+        
         stats.totalAllocations++;
         stats.activeAllocations++;
         stats.turnRequests++;
         
         logEvent('turn_allocation_created', {
           sessionId,
-          session: activeSessions.get(sessionId)
+          username: session?.username || 'unknown',
+          origin: session?.origin || 'unknown',
+          relayedIp: ipMatch ? ipMatch[1] : 'unknown',
+          relayedPort: ipMatch ? ipMatch[2] : 'unknown',
+          timestamp: new Date().toISOString()
+        });
+        
+        console.log(`[TURN] Allocation created - Session: ${sessionId}, User: ${session?.username || 'unknown'}`);
+      }
+    }
+    
+    // Channel binding
+    if (line.includes('channel') && line.includes('bind')) {
+      const sessionMatch = line.match(/session\s+(\w+)/);
+      const channelMatch = line.match(/channel\s+(\d+)/);
+      
+      if (sessionMatch) {
+        logEvent('turn_channel_bind', {
+          sessionId: sessionMatch[1],
+          channel: channelMatch ? channelMatch[1] : 'unknown'
+        });
+      }
+    }
+    
+    // Permission created
+    if (line.includes('permission') && line.includes('created')) {
+      const sessionMatch = line.match(/session\s+(\w+)/);
+      const ipMatch = line.match(/for\s+([0-9.]+)/);
+      
+      if (sessionMatch) {
+        logEvent('turn_permission_created', {
+          sessionId: sessionMatch[1],
+          peerIp: ipMatch ? ipMatch[1] : 'unknown'
         });
       }
     }
@@ -160,27 +215,57 @@ function parseLogEntry(line) {
             sessionId,
             username: session.username,
             origin: session.origin,
-            duration: duration
+            durationMs: duration,
+            durationSec: Math.round(duration / 1000),
+            timestamp: new Date().toISOString()
           });
+          
+          console.log(`[TURN] Connection closed - Session: ${sessionId}, User: ${session.username}, Duration: ${Math.round(duration/1000)}s`);
           
           activeSessions.delete(sessionId);
         }
       }
     }
     
-    if (line.includes('STUN') && !line.includes('TURN')) {
-      stats.stunRequests++;
-    }
-    
     if (line.toLowerCase().includes('error')) {
       stats.errors++;
-      logEvent('turn_error', { message: line });
+      
+      // Extract error details
+      const errorMatch = line.match(/error\s+(\d+)/i);
+      const errorCode = errorMatch ? errorMatch[1] : 'unknown';
+      
+      logEvent('turn_error', { 
+        errorCode,
+        message: line.substring(0, 200),
+        timestamp: new Date().toISOString()
+      });
+      
+      console.error(`[TURN] Error: ${line.substring(0, 100)}`);
     }
 
     // Parse data transfer info
     const bytesMatch = line.match(/(\d+)\s+bytes/);
     if (bytesMatch) {
-      stats.totalBytes += parseInt(bytesMatch[1]);
+      const bytes = parseInt(bytesMatch[1]);
+      stats.totalBytes += bytes;
+      
+      // Log significant data transfers (> 1MB)
+      if (bytes > 1048576) {
+        logEvent('data_transfer', {
+          bytes,
+          sizeMB: (bytes / 1048576).toFixed(2)
+        });
+      }
+    }
+    
+    // Refresh request/response
+    if (line.includes('refresh')) {
+      const sessionMatch = line.match(/session\s+(\w+)/);
+      if (sessionMatch) {
+        logEvent('turn_refresh', {
+          sessionId: sessionMatch[1]
+        });
+      }
     }
 
   } catch (error) {
@@ -192,6 +277,7 @@ function parseLogEntry(line) {
 function monitorLogs() {
   // Check if log file exists, create if not
   if (!fs.existsSync(LOG_FILE)) {
+    console.log(`Creating log file: ${LOG_FILE}`);
     fs.writeFileSync(LOG_FILE, '');
   }
 
@@ -201,15 +287,22 @@ function monitorLogs() {
   });
 
   tail.on('line', (line) => {
-    console.log('TURN Log:', line);
+    // Log all TURN server output
+    console.log(`[TURN Server] ${line}`);
     parseLogEntry(line);
   });
 
   tail.on('error', (error) => {
-    console.error('Error tailing log file:', error);
+    console.error('[TURN Monitor] Error tailing log file:', error);
   });
 
-  console.log(`Monitoring TURN server logs at ${LOG_FILE}`);
+  console.log(`[TURN Monitor] Monitoring TURN server logs at ${LOG_FILE}`);
+  
+  // Log initial event
+  logEvent('service_started', {
+    logFile: LOG_FILE,
+    timestamp: new Date().toISOString()
+  });
 }
 
 // Health check endpoint
