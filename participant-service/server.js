@@ -150,65 +150,6 @@ app.get("/health", async (req, res) => {
 });
 
 // Auth Routes
-app.post("/api/participants", async (req, res, next) => {
-  try {
-    const { username } = req.body;
-    // Validate input
-    if (!username || typeof username !== "string") {
-      return res.status(400).json({
-        error: "Username is required and must be a string",
-        timestamp: new Date().toISOString(),
-      });
-    }
-    // Trim and validate username length
-    const trimmedUsername = username.trim();
-    if (trimmedUsername.length < 3 || trimmedUsername.length > 20) {
-      return res.status(400).json({
-        error: "Username must be between 3 and 20 characters",
-        timestamp: new Date().toISOString(),
-      });
-    }
-    // Check if user already exists
-    let user = await User.findOne({ username: trimmedUsername });
-    if (user) {
-      // User exists, update their online status
-      user.isOnline = true;
-      user.lastSeen = new Date();
-      await user.save();
-    } else {
-      // Create new user
-      user = new User({
-        username: trimmedUsername,
-        isOnline: true,
-        lastSeen: new Date(),
-      });
-      await user.save();
-    }
-    // Log the action to RabbitMQ (only for logging, not for chat messages)
-    await logAction("user_joined", trimmedUsername);
-    // Note: Don't send to user_actions here - the chat service will handle it via WebSocket
-    res.status(200).json({
-      message: "User joined successfully",
-      user: {
-        id: user._id,
-        username: user.username,
-        isOnline: user.isOnline,
-        lastSeen: user.lastSeen,
-      },
-      timestamp: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error("Error in /api/participants endpoint:", error);
-    if (error.code === 11000) {
-      return res.status(409).json({
-        error: "Username already exists",
-        timestamp: new Date().toISOString(),
-      });
-    }
-    next(error);
-  }
-});
-
 app.post("/api/participants/join", async (req, res, next) => {
   try {
     const { username } = req.body;
@@ -389,11 +330,11 @@ app.get("/api/participants/stats", async (req, res, next) => {
     const totalUsers = await User.countDocuments();
     const onlineUsers = await User.countDocuments({ isOnline: true });
     const offlineUsers = totalUsers - onlineUsers;
-    
+
     // Get recently active users (last 24 hours)
     const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const recentlyActive = await User.countDocuments({ 
-      lastSeen: { $gte: last24Hours } 
+    const recentlyActive = await User.countDocuments({
+      lastSeen: { $gte: last24Hours },
     });
 
     res.status(200).json({
@@ -402,7 +343,7 @@ app.get("/api/participants/stats", async (req, res, next) => {
         totalUsers,
         onlineUsers,
         offlineUsers,
-        recentlyActive
+        recentlyActive,
       },
       timestamp: new Date().toISOString(),
     });

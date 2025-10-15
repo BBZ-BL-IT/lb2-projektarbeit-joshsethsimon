@@ -17,6 +17,8 @@ import {
   DialogActions,
   IconButton,
   Alert,
+  Chip,
+  Tooltip,
 } from "@mui/material";
 import {
   VideoCall,
@@ -32,12 +34,21 @@ import {
   Menu,
   Close,
   History,
+  CheckCircle,
+  Warning,
 } from "@mui/icons-material";
 import io from "socket.io-client";
 import axios from "axios";
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Link,
+  useNavigate,
+} from "react-router-dom";
 import Statistics from "./Statistics";
 import Logs from "./Logs";
+import { getWebRTCConfig, isTurnServiceAvailable } from "./utils/webrtc-helper";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
 
@@ -55,6 +66,7 @@ function ChatApp() {
   const [typingUsers, setTypingUsers] = useState([]);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [isUsersPanelOpen, setIsUsersPanelOpen] = useState(true);
+  const [turnServiceAvailable, setTurnServiceAvailable] = useState(false);
 
   // Video Call States
   const [isCallActive, setIsCallActive] = useState(false);
@@ -84,29 +96,49 @@ function ChatApp() {
   // Check for stored credentials on component mount
   useEffect(() => {
     const checkStoredAuth = async () => {
-      const storedUsername = localStorage.getItem('chatUsername');
-      
+      const storedUsername = localStorage.getItem("chatUsername");
+
       if (storedUsername) {
         try {
           // Verify the user still exists and reactivate them
-          await axios.post(`${API_URL}/api/participants`, { 
-            username: storedUsername 
+          await axios.post(`${API_URL}/api/participants/join`, {
+            username: storedUsername,
           });
-          
+
           setUsername(storedUsername);
           setIsLoggedIn(true);
           setError("");
         } catch (error) {
           console.error("Stored login failed:", error);
           // Clear invalid stored credentials
-          localStorage.removeItem('chatUsername');
+          localStorage.removeItem("chatUsername");
         }
       }
-      
+
       setCheckingAuth(false);
     };
 
     checkStoredAuth();
+  }, []);
+
+  // Check TURN service availability
+  useEffect(() => {
+    const checkTurnService = async () => {
+      const available = await isTurnServiceAvailable();
+      setTurnServiceAvailable(available);
+      if (available) {
+        console.log("STUN/TURN service is available");
+      } else {
+        console.log(
+          "STUN/TURN service is not available, will use fallback public STUN servers",
+        );
+      }
+    };
+
+    checkTurnService();
+    // Check every 30 seconds
+    const interval = setInterval(checkTurnService, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // Initialize WebSocket connection
@@ -114,20 +146,20 @@ function ChatApp() {
     if (isLoggedIn && username) {
       try {
         const newSocket = io(window.location.origin, {
-          transports: ['websocket', 'polling'],
+          transports: ["websocket", "polling"],
           timeout: 20000,
-          path: '/ws/socket.io/',
+          path: "/ws/socket.io/",
           forceNew: true,
         });
 
-        newSocket.on('connect', () => {
-          console.log('Connected to WebSocket server');
+        newSocket.on("connect", () => {
+          console.log("Connected to WebSocket server");
           newSocket.emit("join", { username });
           setError("");
         });
 
-        newSocket.on('connect_error', (err) => {
-          console.error('WebSocket connection error:', err);
+        newSocket.on("connect_error", (err) => {
+          console.error("WebSocket connection error:", err);
           setError("Failed to connect to chat server");
         });
 
@@ -156,13 +188,13 @@ function ChatApp() {
         });
 
         newSocket.on("user-typing", (data) => {
-          setTypingUsers(prev => {
+          setTypingUsers((prev) => {
             if (data.isTyping) {
-              return prev.includes(data.username) 
-                ? prev 
+              return prev.includes(data.username)
+                ? prev
                 : [...prev, data.username];
             } else {
-              return prev.filter(user => user !== data.username);
+              return prev.filter((user) => user !== data.username);
             }
           });
         });
@@ -173,7 +205,9 @@ function ChatApp() {
         newSocket.on("call-end", handleCallEnd);
 
         newSocket.on("message-deleted", (data) => {
-          setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
+          setMessages((prev) =>
+            prev.filter((msg) => msg._id !== data.messageId),
+          );
         });
 
         newSocket.on("error", (data) => {
@@ -186,7 +220,7 @@ function ChatApp() {
           newSocket.disconnect();
         };
       } catch (err) {
-        console.error('Failed to initialize WebSocket:', err);
+        console.error("Failed to initialize WebSocket:", err);
         setError("Failed to initialize chat connection");
       }
     }
@@ -203,9 +237,9 @@ function ChatApp() {
     try {
       setLoading(true);
       const response = await axios.get(`${API_URL}/api/chat/messages/recent`, {
-        params: { limit: 50 }
+        params: { limit: 50 },
       });
-      
+
       if (response.data.messages) {
         setMessages(response.data.messages);
       }
@@ -221,7 +255,7 @@ function ChatApp() {
     try {
       const response = await axios.get(`${API_URL}/api/chat/users`);
       if (response.data.users) {
-        setOnlineUsers(response.data.users.filter(u => u !== username));
+        setOnlineUsers(response.data.users.filter((u) => u !== username));
       }
     } catch (error) {
       console.error("Failed to load online users:", error);
@@ -240,28 +274,32 @@ function ChatApp() {
     }
 
     if (!/^[a-zA-Z0-9_-]+$/.test(username.trim())) {
-      setError("Username can only contain letters, numbers, underscores, and hyphens");
+      setError(
+        "Username can only contain letters, numbers, underscores, and hyphens",
+      );
       return;
     }
 
     try {
       setLoading(true);
       setError("");
-      
-      await axios.post(`${API_URL}/api/participants`, { 
-        username: username.trim() 
+
+      await axios.post(`${API_URL}/api/participants/join`, {
+        username: username.trim(),
       });
-      
+
       // Store credentials in localStorage
-      localStorage.setItem('chatUsername', username.trim());
-      
+      localStorage.setItem("chatUsername", username.trim());
+
       setIsLoggedIn(true);
     } catch (error) {
       console.error("Login failed:", error);
       if (error.response?.status === 409) {
         setError("Username already taken. Please choose another.");
       } else {
-        setError(error.response?.data?.error || "Login failed. Please try again.");
+        setError(
+          error.response?.data?.error || "Login failed. Please try again.",
+        );
       }
     } finally {
       setLoading(false);
@@ -271,22 +309,22 @@ function ChatApp() {
   const handleLogout = async () => {
     try {
       if (username) {
-        await axios.post(`${API_URL}/api/participants/leave`, { 
-          username: username.trim() 
+        await axios.post(`${API_URL}/api/participants/leave`, {
+          username: username.trim(),
         });
       }
     } catch (error) {
       console.error("Logout failed:", error);
     }
-    
+
     // Clear stored credentials
-    localStorage.removeItem('chatUsername');
-    
+    localStorage.removeItem("chatUsername");
+
     // Disconnect socket
     if (socket) {
       socket.disconnect();
     }
-    
+
     // Reset state
     setIsLoggedIn(false);
     setUsername("");
@@ -310,7 +348,7 @@ function ChatApp() {
           ...messageData,
           timestamp: new Date().toISOString(),
         });
-        
+
         setNewMessage("");
         setError("");
       } else {
@@ -337,14 +375,14 @@ function ChatApp() {
 
   const handleTyping = (e) => {
     setNewMessage(e.target.value);
-    
+
     if (socket && socket.connected) {
       socket.emit("typing", { isTyping: true });
-      
+
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
-      
+
       typingTimeoutRef.current = setTimeout(() => {
         socket.emit("typing", { isTyping: false });
       }, 1000);
@@ -353,26 +391,30 @@ function ChatApp() {
 
   // Effect to attach local stream to video element when dialog opens
   useEffect(() => {
-    console.log("Dialog open effect:", { 
-      callDialogOpen, 
-      hasLocalStream: !!localStreamRef.current, 
-      hasLocalVideoRef: !!localVideoRef.current 
+    console.log("Dialog open effect:", {
+      callDialogOpen,
+      hasLocalStream: !!localStreamRef.current,
+      hasLocalVideoRef: !!localVideoRef.current,
     });
-    
+
     if (callDialogOpen && localStreamRef.current && localVideoRef.current) {
       console.log("Attaching local stream to video element");
-      console.log("Local stream tracks:", localStreamRef.current.getTracks().map(t => ({
-        kind: t.kind,
-        enabled: t.enabled,
-        readyState: t.readyState
-      })));
-      
+      console.log(
+        "Local stream tracks:",
+        localStreamRef.current.getTracks().map((t) => ({
+          kind: t.kind,
+          enabled: t.enabled,
+          readyState: t.readyState,
+        })),
+      );
+
       localVideoRef.current.srcObject = localStreamRef.current;
       localVideoRef.current.onloadedmetadata = () => {
         console.log("Local video metadata loaded");
-        localVideoRef.current.play()
+        localVideoRef.current
+          .play()
           .then(() => console.log("Local video playing"))
-          .catch(e => console.error("Local video play error:", e));
+          .catch((e) => console.error("Local video play error:", e));
       };
     }
   }, [callDialogOpen]);
@@ -380,7 +422,7 @@ function ChatApp() {
   const initializeWebRTC = async () => {
     try {
       console.log("=== INITIALIZING WEBRTC ===");
-      
+
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("WebRTC is not supported by this browser");
       }
@@ -402,12 +444,15 @@ function ChatApp() {
       try {
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         console.log("Got media stream:", stream.id);
-        console.log("Stream tracks:", stream.getTracks().map(t => ({
-          kind: t.kind,
-          label: t.label,
-          enabled: t.enabled,
-          readyState: t.readyState
-        })));
+        console.log(
+          "Stream tracks:",
+          stream.getTracks().map((t) => ({
+            kind: t.kind,
+            label: t.label,
+            enabled: t.enabled,
+            readyState: t.readyState,
+          })),
+        );
       } catch (videoError) {
         console.warn("Video not available, trying audio only:", videoError);
         try {
@@ -421,29 +466,28 @@ function ChatApp() {
 
       localStreamRef.current = stream;
       console.log("Stored stream in localStreamRef");
-      
+
       // If video element already exists, attach stream immediately
       if (localVideoRef.current) {
         console.log("Local video ref exists, attaching stream NOW");
         localVideoRef.current.srcObject = stream;
         localVideoRef.current.onloadedmetadata = () => {
           console.log("Local video metadata loaded in initWebRTC");
-          localVideoRef.current.play()
+          localVideoRef.current
+            .play()
             .then(() => console.log("Local video playing from initWebRTC"))
-            .catch(e => console.error("Local video play error:", e));
+            .catch((e) => console.error("Local video play error:", e));
         };
       } else {
-        console.log("Local video ref DOES NOT exist yet, will attach in useEffect");
+        console.log(
+          "Local video ref DOES NOT exist yet, will attach in useEffect",
+        );
       }
 
-      const pcConfig = {
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "stun:stun2.l.google.com:19302" },
-        ],
-        iceCandidatePoolSize: 10,
-      };
+      // Fetch STUN/TURN configuration from the backend
+      console.log("Fetching STUN/TURN configuration...");
+      const pcConfig = await getWebRTCConfig();
+      console.log("Using WebRTC configuration:", pcConfig);
 
       const peerConnection = new RTCPeerConnection(pcConfig);
       peerConnectionRef.current = peerConnection;
@@ -451,7 +495,9 @@ function ChatApp() {
 
       // Add tracks to peer connection
       stream.getTracks().forEach((track) => {
-        console.log(`Adding ${track.kind} track (${track.label}) to peer connection`);
+        console.log(
+          `Adding ${track.kind} track (${track.label}) to peer connection`,
+        );
         const sender = peerConnection.addTrack(track, stream);
         console.log("Track added, sender:", sender.track?.kind);
       });
@@ -462,7 +508,7 @@ function ChatApp() {
           console.log("Sending ICE candidate to", currentCallTarget);
           socket.emit("ice-candidate", {
             target: currentCallTarget,
-            candidate: event.candidate
+            candidate: event.candidate,
           });
         } else if (!event.candidate) {
           console.log("ICE gathering complete");
@@ -475,25 +521,29 @@ function ChatApp() {
         console.log("Track kind:", event.track.kind);
         console.log("Track state:", event.track.readyState);
         console.log("Number of streams:", event.streams?.length);
-        
+
         if (event.streams && event.streams[0]) {
           const remoteStream = event.streams[0];
           console.log("Remote stream ID:", remoteStream.id);
-          console.log("Remote stream tracks:", remoteStream.getTracks().map(t => ({
-            kind: t.kind,
-            enabled: t.enabled,
-            readyState: t.readyState
-          })));
-          
+          console.log(
+            "Remote stream tracks:",
+            remoteStream.getTracks().map((t) => ({
+              kind: t.kind,
+              enabled: t.enabled,
+              readyState: t.readyState,
+            })),
+          );
+
           // Set remote stream
           if (remoteVideoRef.current) {
             console.log("Setting remote video srcObject");
             remoteVideoRef.current.srcObject = remoteStream;
             remoteVideoRef.current.onloadedmetadata = () => {
               console.log("Remote video metadata loaded, attempting play");
-              remoteVideoRef.current.play()
+              remoteVideoRef.current
+                .play()
                 .then(() => console.log("Remote video playing successfully"))
-                .catch(e => console.error("Remote video play error:", e));
+                .catch((e) => console.error("Remote video play error:", e));
             };
           } else {
             console.error("Remote video ref is NULL!");
@@ -521,14 +571,26 @@ function ChatApp() {
 
       let errorMessage = "Unknown error";
 
-      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-        errorMessage = "Camera/microphone permission denied. Please allow in browser settings.";
-      } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+      if (
+        error.name === "NotAllowedError" ||
+        error.name === "PermissionDeniedError"
+      ) {
+        errorMessage =
+          "Camera/microphone permission denied. Please allow in browser settings.";
+      } else if (
+        error.name === "NotFoundError" ||
+        error.name === "DevicesNotFoundError"
+      ) {
         errorMessage = "No camera or microphone found.";
-      } else if (error.name === "NotReadableError" || error.name === "TrackStartError") {
-        errorMessage = "Camera/microphone is already being used by another application.";
+      } else if (
+        error.name === "NotReadableError" ||
+        error.name === "TrackStartError"
+      ) {
+        errorMessage =
+          "Camera/microphone is already being used by another application.";
       } else if (error.name === "NotSupportedError") {
-        errorMessage = "WebRTC is not supported. Use HTTPS or a supported browser.";
+        errorMessage =
+          "WebRTC is not supported. Use HTTPS or a supported browser.";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -542,32 +604,32 @@ function ChatApp() {
     try {
       console.log("=== START CALL INITIATED ===");
       console.log("Target user:", targetUser);
-      
+
       setCurrentCallTarget(targetUser);
       setIsCallActive(true);
       setCallDialogOpen(true);
-      
+
       console.log("Dialog opened, waiting for render...");
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
       console.log("Checking video refs after dialog open:");
       console.log("- localVideoRef.current exists:", !!localVideoRef.current);
       console.log("- remoteVideoRef.current exists:", !!remoteVideoRef.current);
-      
+
       const peerConnection = await initializeWebRTC();
-      
+
       if (peerConnection && socket) {
         console.log("Creating offer...");
         const offer = await peerConnection.createOffer({
           offerToReceiveAudio: true,
-          offerToReceiveVideo: true
+          offerToReceiveVideo: true,
         });
         await peerConnection.setLocalDescription(offer);
 
         console.log("Offer created, sending to", targetUser);
-        console.log("Offer has video:", offer.sdp.includes('m=video'));
-        console.log("Offer has audio:", offer.sdp.includes('m=audio'));
-        
+        console.log("Offer has video:", offer.sdp.includes("m=video"));
+        console.log("Offer has audio:", offer.sdp.includes("m=audio"));
+
         socket.emit("call-offer", {
           target: targetUser,
           offer: offer,
@@ -591,36 +653,36 @@ function ChatApp() {
     try {
       console.log("=== ACCEPT CALL INITIATED ===");
       console.log("Accepting call from", incomingCall.from);
-      
+
       const callData = incomingCall;
       setIncomingCall(null);
       setIsCallActive(true);
       setCallDialogOpen(true);
-      
+
       console.log("Dialog opened, waiting for render...");
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
       console.log("Checking video refs after dialog open:");
       console.log("- localVideoRef.current exists:", !!localVideoRef.current);
       console.log("- remoteVideoRef.current exists:", !!remoteVideoRef.current);
-      
+
       const peerConnection = await initializeWebRTC();
-      
+
       if (peerConnection && socket && callData) {
         console.log("Setting remote description from offer...");
         await peerConnection.setRemoteDescription(
-          new RTCSessionDescription(callData.offer)
+          new RTCSessionDescription(callData.offer),
         );
         console.log("Remote description set");
-        
+
         console.log("Creating answer...");
         const answer = await peerConnection.createAnswer();
         await peerConnection.setLocalDescription(answer);
 
         console.log("Answer created, sending to", callData.from);
-        console.log("Answer has video:", answer.sdp.includes('m=video'));
-        console.log("Answer has audio:", answer.sdp.includes('m=audio'));
-        
+        console.log("Answer has video:", answer.sdp.includes("m=video"));
+        console.log("Answer has audio:", answer.sdp.includes("m=audio"));
+
         socket.emit("call-answer", {
           target: callData.from,
           answer: answer,
@@ -629,7 +691,11 @@ function ChatApp() {
 
         // Process pending ICE candidates
         if (pendingIceCandidatesRef.current.length > 0) {
-          console.log("Processing", pendingIceCandidatesRef.current.length, "pending ICE candidates");
+          console.log(
+            "Processing",
+            pendingIceCandidatesRef.current.length,
+            "pending ICE candidates",
+          );
           for (const candidate of pendingIceCandidatesRef.current) {
             try {
               await peerConnection.addIceCandidate(candidate);
@@ -660,9 +726,9 @@ function ChatApp() {
       console.log("Received call answer from", data.from);
       if (peerConnectionRef.current) {
         await peerConnectionRef.current.setRemoteDescription(
-          new RTCSessionDescription(data.answer)
+          new RTCSessionDescription(data.answer),
         );
-        
+
         // Process pending ICE candidates
         if (pendingIceCandidatesRef.current.length > 0) {
           console.log("Processing pending ICE candidates");
@@ -685,8 +751,11 @@ function ChatApp() {
     try {
       console.log("Received ICE candidate");
       const candidate = data.candidate;
-      
-      if (peerConnectionRef.current && peerConnectionRef.current.remoteDescription) {
+
+      if (
+        peerConnectionRef.current &&
+        peerConnectionRef.current.remoteDescription
+      ) {
         await peerConnectionRef.current.addIceCandidate(candidate);
       } else {
         console.log("Queuing ICE candidate");
@@ -706,7 +775,7 @@ function ChatApp() {
 
   const handleCallEnd = () => {
     console.log("Ending call");
-    
+
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
@@ -764,7 +833,7 @@ function ChatApp() {
         clearTimeout(typingTimeoutRef.current);
       }
       if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
+        localStreamRef.current.getTracks().forEach((track) => track.stop());
       }
     };
   }, []);
@@ -772,7 +841,10 @@ function ChatApp() {
   // Show loading state while checking authentication
   if (checkingAuth) {
     return (
-      <Container maxWidth="sm" style={{ marginTop: "50px", textAlign: "center" }}>
+      <Container
+        maxWidth="sm"
+        style={{ marginTop: "50px", textAlign: "center" }}
+      >
         <Paper elevation={3} style={{ padding: "30px" }}>
           <Typography variant="h5" gutterBottom>
             Loading...
@@ -829,7 +901,10 @@ function ChatApp() {
               Connect and communicate instantly
             </Typography>
             {error && (
-              <Alert severity="error" sx={{ marginBottom: "24px", borderRadius: "8px" }}>
+              <Alert
+                severity="error"
+                sx={{ marginBottom: "24px", borderRadius: "8px" }}
+              >
                 {error}
               </Alert>
             )}
@@ -849,10 +924,14 @@ function ChatApp() {
               error={!!error}
               helperText="3-20 characters, letters/numbers/underscore/hyphen only"
             />
-            <Typography 
-              variant="caption" 
-              color="text.secondary" 
-              sx={{ display: 'block', marginBottom: "16px", textAlign: 'center' }}
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{
+                display: "block",
+                marginBottom: "16px",
+                textAlign: "center",
+              }}
             >
               💡 Your username will be saved for next time
             </Typography>
@@ -870,7 +949,8 @@ function ChatApp() {
                 background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                 boxShadow: "0 4px 15px rgba(102, 126, 234, 0.4)",
                 "&:hover": {
-                  background: "linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)",
+                  background:
+                    "linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)",
                   boxShadow: "0 6px 20px rgba(102, 126, 234, 0.6)",
                 },
               }}
@@ -897,9 +977,31 @@ function ChatApp() {
           <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>
             💬 Chat App - Welcome, {username}
           </Typography>
+          <Tooltip
+            title={
+              turnServiceAvailable
+                ? "STUN/TURN server active - Enhanced WebRTC connectivity"
+                : "Using fallback public STUN servers"
+            }
+            arrow
+          >
+            <Chip
+              icon={turnServiceAvailable ? <CheckCircle /> : <Warning />}
+              label={turnServiceAvailable ? "TURN Active" : "Fallback STUN"}
+              size="small"
+              color={turnServiceAvailable ? "success" : "warning"}
+              sx={{
+                marginRight: 2,
+                fontWeight: 500,
+                "& .MuiChip-icon": {
+                  color: "inherit",
+                },
+              }}
+            />
+          </Tooltip>
           <IconButton
             color="inherit"
-            onClick={() => navigate('/statistics')}
+            onClick={() => navigate("/statistics")}
             title="View Statistics"
             sx={{
               "&:hover": {
@@ -911,7 +1013,7 @@ function ChatApp() {
           </IconButton>
           <IconButton
             color="inherit"
-            onClick={() => navigate('/logs')}
+            onClick={() => navigate("/logs")}
             title="View Logs"
             sx={{
               "&:hover": {
@@ -1132,7 +1234,8 @@ function ChatApp() {
                     borderRadius: "12px",
                     background: msg.username === username ? "#e3f2fd" : "white",
                     border: "1px solid",
-                    borderColor: msg.username === username ? "#90caf9" : "#e0e0e0",
+                    borderColor:
+                      msg.username === username ? "#90caf9" : "#e0e0e0",
                     maxWidth: "70%",
                     marginLeft: msg.username === username ? "auto" : "0",
                     marginRight: msg.username === username ? "0" : "auto",
@@ -1180,8 +1283,8 @@ function ChatApp() {
                       fontStyle: "italic",
                     }}
                   >
-                    {typingUsers.join(", ")} {typingUsers.length === 1 ? "is" : "are"}{" "}
-                    typing...
+                    {typingUsers.join(", ")}{" "}
+                    {typingUsers.length === 1 ? "is" : "are"} typing...
                   </Typography>
                 </Box>
               )}
@@ -1215,10 +1318,12 @@ function ChatApp() {
                   minWidth: "100px",
                   textTransform: "none",
                   fontWeight: 600,
-                  background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                  background:
+                    "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
                   boxShadow: "0 4px 15px rgba(102, 126, 234, 0.4)",
                   "&:hover": {
-                    background: "linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)",
+                    background:
+                      "linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)",
                     boxShadow: "0 6px 20px rgba(102, 126, 234, 0.6)",
                   },
                 }}
@@ -1379,9 +1484,13 @@ function ChatApp() {
             onClick={toggleMute}
             sx={{
               color: isMuted ? "#e74c3c" : "white",
-              background: isMuted ? "rgba(231, 76, 60, 0.2)" : "rgba(255,255,255,0.1)",
+              background: isMuted
+                ? "rgba(231, 76, 60, 0.2)"
+                : "rgba(255,255,255,0.1)",
               "&:hover": {
-                background: isMuted ? "rgba(231, 76, 60, 0.3)" : "rgba(255,255,255,0.2)",
+                background: isMuted
+                  ? "rgba(231, 76, 60, 0.3)"
+                  : "rgba(255,255,255,0.2)",
               },
             }}
             title={isMuted ? "Unmute" : "Mute"}
@@ -1392,9 +1501,13 @@ function ChatApp() {
             onClick={toggleVideo}
             sx={{
               color: !isVideoEnabled ? "#e74c3c" : "white",
-              background: !isVideoEnabled ? "rgba(231, 76, 60, 0.2)" : "rgba(255,255,255,0.1)",
+              background: !isVideoEnabled
+                ? "rgba(231, 76, 60, 0.2)"
+                : "rgba(255,255,255,0.1)",
               "&:hover": {
-                background: !isVideoEnabled ? "rgba(231, 76, 60, 0.3)" : "rgba(255,255,255,0.2)",
+                background: !isVideoEnabled
+                  ? "rgba(231, 76, 60, 0.3)"
+                  : "rgba(255,255,255,0.2)",
               },
             }}
             title={!isVideoEnabled ? "Enable Video" : "Disable Video"}

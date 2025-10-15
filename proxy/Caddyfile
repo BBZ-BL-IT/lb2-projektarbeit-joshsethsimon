@@ -4,20 +4,12 @@
 }
 
 :80 {
-    # Proxy React frontend hosted on Nginx
-    handle_path / {
-        reverse_proxy frontend:8000
-    }
-    handle /static/* {
-        reverse_proxy frontend:8000
-    }
-
-    # WebSocket connections for chat
+    # WebSocket connections for chat (must come before API routes)
     handle /ws* {
         reverse_proxy chat-service:8001
     }
 
-    # API routes
+    # API routes (must come before SPA fallback)
     handle /api/media/* {
         reverse_proxy media-service:8002
     }
@@ -30,7 +22,28 @@
         reverse_proxy participant-service:8003
     }
 
-    handle /api/logs/* {
+    handle /api/logs* {
         reverse_proxy log-service:8004
+    }
+
+    # STUN/TURN service API routes
+    handle /api/turn/* {
+        reverse_proxy stun-turn-service:8005
+    }
+
+    # STUN/TURN web admin interface
+    handle /turn-admin* {
+        reverse_proxy stun-turn-service:8080
+    }
+
+    # Static files
+    handle /static/* {
+        reverse_proxy frontend:8000
+    }
+
+    # React SPA - catch all routes and proxy to frontend
+    # This allows React Router to handle /logs, /statistics, etc.
+    handle /* {
+        reverse_proxy frontend:8000
     }
 }
