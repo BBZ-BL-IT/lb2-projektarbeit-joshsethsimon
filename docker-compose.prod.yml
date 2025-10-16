@@ -76,6 +76,11 @@ services:
   stun-turn-service:
     container_name: stun-turn-service
     build: ./stun-turn-service
+    ports:
+      - "3478:3478/udp" # STUN/TURN UDP
+      - "3478:3478/tcp" # STUN/TURN TCP
+      - "5349:5349/tcp" # TURN TLS
+      - "49152-49200:49152-49200/udp" # TURN relay ports (limited range for Docker)
     environment:
       - PORT=8005
       - NODE_ENV=production
