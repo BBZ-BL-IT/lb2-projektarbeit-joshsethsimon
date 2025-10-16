@@ -80,12 +80,16 @@ services:
       - "3478:3478/udp" # STUN/TURN UDP
       - "3478:3478/tcp" # STUN/TURN TCP
       - "5349:5349/tcp" # TURN TLS
+      - "8005:8005"     # HTTP API
       - "49152-49200:49152-49200/udp" # TURN relay ports (limited range for Docker)
     environment:
       - PORT=8005
       - NODE_ENV=production
       - RABBITMQ_URL=${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672}
-      - TURN_SERVER_HOST=app.lab.joku.dev
+      - TURN_SERVER_HOST=${DOMAIN:-app.lab.joku.dev}
+      - TURN_USERNAME=${TURN_USERNAME:-turnuser}
+      - TURN_PASSWORD=${TURN_PASSWORD:-turnpassword}
+      - EXTERNAL_IP=${EXTERNAL_IP:-}
     networks:
       - chat-network
     restart: unless-stopped

@@ -36,7 +36,7 @@ The project now includes a dedicated STUN/TURN server for improved WebRTC connec
 - 8080 - Web admin interface
 - 49152-49200/UDP - TURN relay ports
 
-See [STUN/TURN Integration Guide](./stun-turn-service/INTEGRATION_GUIDE.md) for detailed usage.
+**📖 For detailed WebRTC setup, troubleshooting, and testing, see [WEBRTC_SETUP.md](./WEBRTC_SETUP.md)**
 
 ## Quick Start
 

@@ -9,6 +9,9 @@ const app = express();
 const PORT = process.env.PORT || 8005;
 const RABBITMQ_URL = process.env.RABBITMQ_URL || 'amqp://guest:guest@rabbitmq:5672';
 const LOG_FILE = '/var/log/turnserver.log';
+const TURN_SERVER_HOST = process.env.TURN_SERVER_HOST || 'localhost';
+const TURN_USERNAME = process.env.TURN_USERNAME || 'turnuser';
+const TURN_PASSWORD = process.env.TURN_PASSWORD || 'turnpassword';
 
 app.use(cors());
 app.use(express.json());
@@ -311,18 +314,38 @@ function monitorLogs() {
 app.get('/health', async (req, res) => {
   const rabbitMQStatus = channel ? 'UP' : 'DOWN';
   
-  res.json({
-    status: 'OK',
+  // Check if turnserver process is running
+  let turnServerStatus = 'DOWN';
+  try {
+    const { execSync } = require('child_process');
+    execSync('pgrep -x turnserver', { stdio: 'ignore' });
+    turnServerStatus = 'UP';
+  } catch (error) {
+    // pgrep returns non-zero if process not found
+    turnServerStatus = 'DOWN';
+  }
+  
+  const isHealthy = rabbitMQStatus === 'UP' && turnServerStatus === 'UP';
+  
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'OK' : 'DEGRADED',
     timestamp: new Date().toISOString(),
     service: 'stun-turn-service',
     dependencies: {
-      rabbitmq: rabbitMQStatus
+      rabbitmq: rabbitMQStatus,
+      turnserver: turnServerStatus
     },
     turnServer: {
-      active: true,
+      active: turnServerStatus === 'UP',
       stunPort: 3478,
       turnPort: 3478,
-      tlsPort: 5349
+      tlsPort: 5349,
+      relayPortRange: '49152-49200'
+    },
+    config: {
+      host: TURN_SERVER_HOST,
+      username: TURN_USERNAME,
+      hasPassword: !!TURN_PASSWORD
     }
   });
 });
@@ -354,28 +377,40 @@ app.get('/api/turn/sessions', (req, res) => {
 
 // Get TURN server configuration info
 app.get('/api/turn/config', (req, res) => {
-  res.json({
-    stunServer: `stun:${process.env.TURN_SERVER_HOST || 'localhost'}:3478`,
+  const config = {
+    stunServer: `stun:${TURN_SERVER_HOST}:3478`,
     turnServer: {
       urls: [
-        `turn:${process.env.TURN_SERVER_HOST || 'localhost'}:3478`,
-        `turn:${process.env.TURN_SERVER_HOST || 'localhost'}:3478?transport=tcp`
+        `turn:${TURN_SERVER_HOST}:3478`,
+        `turn:${TURN_SERVER_HOST}:3478?transport=tcp`,
+        `turn:${TURN_SERVER_HOST}:3478?transport=udp`
       ],
-      username: 'turnuser',
-      credential: 'turnpassword'
+      username: TURN_USERNAME,
+      credential: TURN_PASSWORD
     },
     iceServers: [
-      { urls: `stun:${process.env.TURN_SERVER_HOST || 'localhost'}:3478` },
+      { 
+        urls: `stun:${TURN_SERVER_HOST}:3478` 
+      },
       {
         urls: [
-          `turn:${process.env.TURN_SERVER_HOST || 'localhost'}:3478`,
-          `turn:${process.env.TURN_SERVER_HOST || 'localhost'}:3478?transport=tcp`
+          `turn:${TURN_SERVER_HOST}:3478`,
+          `turn:${TURN_SERVER_HOST}:3478?transport=tcp`,
+          `turn:${TURN_SERVER_HOST}:3478?transport=udp`
         ],
-        username: 'turnuser',
-        credential: 'turnpassword'
+        username: TURN_USERNAME,
+        credential: TURN_PASSWORD
       }
     ]
+  };
+  
+  console.log('TURN config requested:', {
+    host: TURN_SERVER_HOST,
+    username: TURN_USERNAME,
+    hasPassword: !!TURN_PASSWORD
   });
+  
+  res.json(config);
 });
 
 // Test endpoint to trigger a log event
@@ -388,6 +423,101 @@ app.post('/api/turn/test-event', async (req, res) => {
     message: 'Test event logged',
     eventType: eventType || 'test_event',
     timestamp: new Date().toISOString()
+  });
+});
+
+// Diagnostic endpoint to test TURN connectivity
+app.get('/api/turn/diagnostic', (req, res) => {
+  res.json({
+    message: 'TURN Server Diagnostic Information',
+    timestamp: new Date().toISOString(),
+    
+    configuration: {
+      host: TURN_SERVER_HOST,
+      username: TURN_USERNAME,
+      stunPort: 3478,
+      turnPort: 3478,
+      tlsPort: 5349,
+      relayPortRange: '49152-49200'
+    },
+    
+    testInstructions: {
+      browser: {
+        description: 'Test WebRTC connectivity from browser console',
+        code: `
+// Copy and paste this in browser console
+const pc = new RTCPeerConnection({
+  iceServers: [
+    { urls: 'stun:${TURN_SERVER_HOST}:3478' },
+    { 
+      urls: 'turn:${TURN_SERVER_HOST}:3478',
+      username: '${TURN_USERNAME}',
+      credential: '${TURN_PASSWORD}'
+    }
+  ]
+});
+
+pc.createDataChannel('test');
+pc.onicecandidate = (e) => {
+  if (e.candidate) {
+    console.log('ICE Candidate:', e.candidate.type, e.candidate.address || e.candidate.ip);
+  } else {
+    console.log('ICE gathering complete');
+  }
+};
+
+pc.createOffer().then(offer => pc.setLocalDescription(offer));
+
+// Wait for ICE gathering, then check:
+setTimeout(() => {
+  pc.getStats().then(stats => {
+    let hasRelay = false;
+    stats.forEach(stat => {
+      if (stat.type === 'local-candidate' && stat.candidateType === 'relay') {
+        hasRelay = true;
+        console.log('✓ TURN relay candidate found:', stat);
+      }
+    });
+    if (!hasRelay) {
+      console.error('✗ No TURN relay candidates - TURN server not working!');
+    }
+  });
+}, 5000);
+`.trim()
+      },
+      
+      curl: {
+        description: 'Test TURN config endpoint',
+        command: `curl http://localhost:8005/api/turn/config`
+      },
+      
+      docker: {
+        description: 'Check TURN server logs',
+        command: 'docker logs stun-turn-service'
+      }
+    },
+    
+    commonIssues: [
+      {
+        issue: 'No relay candidates',
+        causes: [
+          'TURN server not running',
+          'Wrong credentials',
+          'Firewall blocking ports',
+          'Missing EXTERNAL_IP in production'
+        ],
+        solution: 'Check docker logs and verify configuration'
+      },
+      {
+        issue: 'Connection failed',
+        causes: [
+          'Both peers behind symmetric NAT',
+          'Port range too limited',
+          'TURN server not accessible from client'
+        ],
+        solution: 'Set EXTERNAL_IP and ensure ports 3478, 49152-49200 are open'
+      }
+    ]
   });
 });
 

@@ -86,6 +86,9 @@ services:
       - PORT=8005
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672
       - TURN_SERVER_HOST=localhost
+      - TURN_USERNAME=turnuser
+      - TURN_PASSWORD=turnpassword
+      - EXTERNAL_IP=127.0.0.1
     depends_on:
       - rabbitmq
     networks:
