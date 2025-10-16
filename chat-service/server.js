@@ -223,7 +223,15 @@ const logWebRTCEvent = async (eventType, username, details = {}) => {
       await channel.sendToQueue("webrtc_events", Buffer.from(JSON.stringify(logEntry)), {
         persistent: true,
       });
-      await channel.sendToQueue("logs", Buffer.from(JSON.stringify(logEntry)), {
+      // For logs queue, use 'action' field instead of 'eventType'
+      await channel.sendToQueue("logs", Buffer.from(JSON.stringify({
+        action: eventType,
+        username,
+        details,
+        timestamp: new Date(),
+        service: 'chat-service',
+        category: 'webrtc'
+      })), {
         persistent: true,
       });
     }
@@ -235,7 +243,7 @@ const logWebRTCEvent = async (eventType, username, details = {}) => {
 // WebSocket-specific logging
 const logWSEvent = async (eventType, username, details = {}) => {
   const logEntry = {
-    eventType,
+    action: eventType,
     username,
     details,
     timestamp: new Date(),
