@@ -78,14 +78,16 @@ async function logEvent(eventType, details = {}) {
         { persistent: true }
       );
 
-      // Also send to logs queue
+      // Also send to logs queue with correct schema
       await channel.sendToQueue(
         'logs',
         Buffer.from(JSON.stringify({
           action: eventType,
           username: 'webrtc-system',
           details: details,
-          timestamp: new Date()
+          timestamp: new Date(),
+          service: 'stun-turn-service',
+          category: 'webrtc'
         })),
         { persistent: true }
       );

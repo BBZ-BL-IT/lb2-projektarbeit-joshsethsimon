@@ -36,6 +36,18 @@ const logSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    details: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    service: {
+      type: String,
+      default: 'unknown',
+    },
+    category: {
+      type: String,
+      default: 'general',
+    },
     timestamp: {
       type: Date,
       default: Date.now,
@@ -77,13 +89,30 @@ async function setupRabbitMQConsumer() {
       "logs",
       async (msg) => {
         if (msg !== null) {
-          const logEntry = JSON.parse(msg.content.toString());
           try {
+            const logEntry = JSON.parse(msg.content.toString());
+            console.log('Received log entry:', JSON.stringify(logEntry));
+            
+            // Validate required fields
+            if (!logEntry.action) {
+              console.error('Missing action field in log entry:', logEntry);
+              // Nack and don't requeue invalid messages
+              channel.nack(msg, false, false);
+              return;
+            }
+            if (!logEntry.username) {
+              console.error('Missing username field in log entry:', logEntry);
+              // Nack and don't requeue invalid messages
+              channel.nack(msg, false, false);
+              return;
+            }
+            
             const log = new Log(logEntry);
             await log.save();
             channel.ack(msg);
           } catch (error) {
-            console.error("Error saving log to MongoDB:", error);
+            console.error("Error processing log message:", error);
+            console.error("Message content:", msg.content.toString());
             // Nack the message to requeue it, preventing data loss
             channel.nack(msg, false, true);
           }

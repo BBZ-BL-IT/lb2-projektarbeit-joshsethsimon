@@ -95,8 +95,18 @@ async function setupRabbitMQ() {
 }
 
 // Helper functions
-const logAction = async (action, username) => {
-  const logEntry = { action, username, timestamp: new Date() };
+const logAction = async (action, username, details = {}) => {
+  const logEntry = {
+    action,
+    username,
+    details,
+    timestamp: new Date(),
+    service: 'participant-service',
+    category: 'participant'
+  };
+  
+  console.log(`[LOG] ${action} - ${username}:`, details);
+  
   try {
     await channel.sendToQueue("logs", Buffer.from(JSON.stringify(logEntry)), {
       persistent: true,
