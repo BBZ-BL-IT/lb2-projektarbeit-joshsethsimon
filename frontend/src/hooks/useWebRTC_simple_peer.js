@@ -172,6 +172,44 @@ export function useWebRTC(socket) {
   }, [socket, getIceServers]);
 
   /**
+   * Clean up call resources
+   */
+  const handleCallEnd = useCallback(() => {
+    console.log("Ending call and cleaning up");
+    
+    // Destroy peer connection
+    if (peerRef.current) {
+      peerRef.current.destroy();
+      peerRef.current = null;
+    }
+    
+    // Stop all media tracks
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => {
+        track.stop();
+      });
+      localStreamRef.current = null;
+    }
+    
+    // Clear video elements
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
+    }
+    
+    // Reset state
+    setIsCallActive(false);
+    setCallDialogOpen(false);
+    setIncomingCall(null);
+    setCurrentCallTarget(null);
+    setIsMuted(false);
+    setIsVideoEnabled(true);
+    setConnectionState("disconnected");
+  }, []);
+
+  /**
    * Start a call to another user
    */
   const startCall = useCallback(async (targetUser) => {
@@ -197,7 +235,7 @@ export function useWebRTC(socket) {
       handleCallEnd();
       throw error;
     }
-  }, [getUserMedia, createPeer]);
+  }, [getUserMedia, createPeer, handleCallEnd]);
 
   /**
    * Handle incoming call offer
@@ -304,44 +342,6 @@ export function useWebRTC(socket) {
     
     handleCallEnd();
   }, [socket, currentCallTarget]);
-
-  /**
-   * Clean up call resources
-   */
-  const handleCallEnd = useCallback(() => {
-    console.log("Ending call and cleaning up");
-    
-    // Destroy peer connection
-    if (peerRef.current) {
-      peerRef.current.destroy();
-      peerRef.current = null;
-    }
-    
-    // Stop all media tracks
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => {
-        track.stop();
-      });
-      localStreamRef.current = null;
-    }
-    
-    // Clear video elements
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = null;
-    }
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = null;
-    }
-    
-    // Reset state
-    setIsCallActive(false);
-    setCallDialogOpen(false);
-    setIncomingCall(null);
-    setCurrentCallTarget(null);
-    setIsMuted(false);
-    setIsVideoEnabled(true);
-    setConnectionState("disconnected");
-  }, []);
 
   /**
    * Toggle microphone mute
