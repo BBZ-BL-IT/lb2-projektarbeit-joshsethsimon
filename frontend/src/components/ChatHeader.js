@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   AppBar,
   Toolbar,
@@ -16,6 +16,8 @@ import {
   Warning,
   FilterAlt,
   FilterAltOff,
+  Dns,
+  Cloud,
 } from "@mui/icons-material";
 
 function ChatHeader({
@@ -29,6 +31,25 @@ function ChatHeader({
   onToggleSystemMessages,
   onLogout,
 }) {
+  const [forceGoogleStun, setForceGoogleStun] = useState(() => {
+    return localStorage.getItem('forceGoogleStun') === 'true';
+  });
+
+  const toggleGoogleStun = () => {
+    const newValue = !forceGoogleStun;
+    setForceGoogleStun(newValue);
+    localStorage.setItem('forceGoogleStun', newValue.toString());
+    
+    // Show notification
+    const message = newValue 
+      ? '🌐 Forcing Google STUN servers - Reload to apply'
+      : '🔄 Auto-detect STUN/TURN - Reload to apply';
+    
+    if (window.alert) {
+      alert(message);
+    }
+  };
+
   return (
     <AppBar
       position="static"
@@ -119,6 +140,23 @@ function ChatHeader({
             }}
           >
             {hideSystemMessages ? <FilterAltOff /> : <FilterAlt />}
+          </IconButton>
+        </Tooltip>
+        <Tooltip
+          title={forceGoogleStun ? "Using Google STUN only (click to auto-detect)" : "Auto-detect STUN/TURN (click to force Google)"}
+          arrow
+        >
+          <IconButton
+            color="inherit"
+            onClick={toggleGoogleStun}
+            sx={{
+              "&:hover": {
+                background: "rgba(255, 255, 255, 0.1)",
+              },
+              backgroundColor: forceGoogleStun ? "rgba(255, 255, 255, 0.2)" : "transparent",
+            }}
+          >
+            {forceGoogleStun ? <Cloud /> : <Dns />}
           </IconButton>
         </Tooltip>
         <IconButton

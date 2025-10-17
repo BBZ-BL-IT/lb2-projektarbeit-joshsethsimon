@@ -38,10 +38,28 @@ export function useWebRTC(socket) {
    * Get STUN/TURN configuration
    */
   const getIceServers = useCallback(async () => {
+    // Check if forced to use Google STUN (via localStorage or env var)
+    const forceGoogleStun = localStorage.getItem('forceGoogleStun') === 'true' || 
+                            process.env.REACT_APP_FORCE_GOOGLE_STUN === 'true';
+    
+    if (forceGoogleStun) {
+      console.log('🌐 Forcing Google STUN servers');
+      return {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun2.l.google.com:19302" },
+          { urls: "stun:stun3.l.google.com:19302" },
+          { urls: "stun:stun4.l.google.com:19302" }
+        ]
+      };
+    }
+
     try {
       const hasTurn = await isTurnServiceAvailable();
       
       if (hasTurn) {
+        console.log('🔄 Using custom TURN server');
         // Use your TURN server
         return {
           iceServers: [
@@ -59,6 +77,7 @@ export function useWebRTC(socket) {
     }
 
     // Fallback to public STUN servers
+    console.log('📡 Using fallback Google STUN servers');
     return {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
