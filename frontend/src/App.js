@@ -36,6 +36,8 @@ import {
   History,
   CheckCircle,
   Warning,
+  FilterAlt,
+  FilterAltOff,
 } from "@mui/icons-material";
 import io from "socket.io-client";
 import axios from "axios";
@@ -68,6 +70,10 @@ function ChatApp() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [isUsersPanelOpen, setIsUsersPanelOpen] = useState(true);
   const [turnServiceAvailable, setTurnServiceAvailable] = useState(false);
+  const [hideSystemMessages, setHideSystemMessages] = useState(() => {
+    const saved = localStorage.getItem('hideSystemMessages');
+    return saved === 'true';
+  });
 
   // Video Call States
   const [isCallActive, setIsCallActive] = useState(false);
@@ -165,11 +171,23 @@ function ChatApp() {
         });
 
         newSocket.on("message", (data) => {
-          setMessages((prev) => [...prev, data]);
+          setMessages((prev) => {
+            // If hiding system messages and this is a system message, don't add it
+            if (hideSystemMessages && data.username === 'SYSTEM') {
+              return prev;
+            }
+            return [...prev, data];
+          });
         });
 
         newSocket.on("new_message", (data) => {
-          setMessages((prev) => [...prev, data]);
+          setMessages((prev) => {
+            // If hiding system messages and this is a system message, don't add it
+            if (hideSystemMessages && data.username === 'SYSTEM') {
+              return prev;
+            }
+            return [...prev, data];
+          });
         });
 
         newSocket.on("message-history", (history) => {
@@ -236,12 +254,16 @@ function ChatApp() {
       loadMessages();
       loadOnlineUsers();
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, hideSystemMessages]);
 
   const loadMessages = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_URL}/api/chat/messages/recent`, {
+      const endpoint = hideSystemMessages 
+        ? `${API_URL}/api/chat/messages/user`
+        : `${API_URL}/api/chat/messages/recent`;
+      
+      const response = await axios.get(endpoint, {
         params: { limit: 50 },
       });
 
@@ -1045,6 +1067,22 @@ function ChatApp() {
           >
             <Refresh />
           </IconButton>
+          <Tooltip
+            title={hideSystemMessages ? "Show system messages" : "Hide system messages"}
+            arrow
+          >
+            <IconButton
+              color="inherit"
+              onClick={toggleSystemMessages}
+              sx={{
+                "&:hover": {
+                  background: "rgba(255, 255, 255, 0.1)",
+                },
+              }}
+            >
+              {hideSystemMessages ? <FilterAltOff /> : <FilterAlt />}
+            </IconButton>
+          </Tooltip>
           <IconButton
             color="inherit"
             onClick={handleLogout}

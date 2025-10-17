@@ -834,8 +834,11 @@ app.get("/api/chat/messages", async (req, res) => {
 app.get("/api/chat/messages/recent", async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
+    const excludeSystem = req.query.excludeSystem === 'true';
 
-    const messages = await Chat.find()
+    const query = excludeSystem ? { username: { $ne: 'SYSTEM' } } : {};
+
+    const messages = await Chat.find(query)
       .sort({ timestamp: -1 })
       .limit(limit)
       .lean();
@@ -847,6 +850,26 @@ app.get("/api/chat/messages/recent", async (req, res) => {
   } catch (error) {
     console.error("Error fetching recent messages:", error);
     res.status(500).json({ error: "Failed to fetch recent messages" });
+  }
+});
+
+// Get recent user messages only (excluding system messages)
+app.get("/api/chat/messages/user", async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+
+    const messages = await Chat.find({ username: { $ne: 'SYSTEM' } })
+      .sort({ timestamp: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json({
+      messages: messages.reverse(), // Reverse to show oldest first
+      count: messages.length,
+    });
+  } catch (error) {
+    console.error("Error fetching user messages:", error);
+    res.status(500).json({ error: "Failed to fetch user messages" });
   }
 });
 
