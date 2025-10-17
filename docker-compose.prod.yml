@@ -1,0 +1,110 @@
+services:
+  # Caddy Reverse Proxy
+  caddy:
+    container_name: caddy
+    build: ./proxy
+    environment:
+      - DOMAIN=${DOMAIN:-app.lab.joku.dev}
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+  # Frontend React App
+  frontend:
+    build: ./frontend
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=https://app.lab.joku.dev
+      - REACT_APP_WS_URL=wss://app.lab.joku.dev
+      - REACT_APP_TURN_CONFIG_URL=/api/turn/config
+      - REACT_APP_TURN_STATS_URL=/api/turn/stats
+    networks:
+      - chat-network
+    restart: unless-stopped
+    depends_on:
+      - caddy
+
+  # Participant Service
+  participant-service:
+    container_name: participant-service
+    build: ./participant-service
+    environment:
+      - PORT=8003
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL:-mongodb://mongodb:27017/chatapp}
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672}
+    networks:
+      - chat-network
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+      - rabbitmq
+
+  # Chat Service
+  chat-service:
+    container_name: chat-service
+    build: ./chat-service
+    environment:
+      - PORT=8001
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL:-mongodb://mongodb:27017/chatapp}
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672}
+    networks:
+      - chat-network
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+      - rabbitmq
+
+  # Log Service
+  log-service:
+    container_name: log-service
+    build: ./log-service
+    environment:
+      - PORT=8004
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL:-mongodb://mongodb:27017/chatapp}
+      - RABBITMQ_URL=${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672}
+    networks:
+      - chat-network
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+      - rabbitmq
+
+  # MongoDB Database
+  mongodb:
+    container_name: mongodb
+    image: mongo:6.0
+    environment:
+      #  - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USER:-admin}
+      #  - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-changeme}
+      - MONGO_INITDB_DATABASE=chatapp
+    networks:
+      - chat-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # RabbitMQ Service
+  rabbitmq:
+    container_name: rabbitmq
+    image: rabbitmq:3-management
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD:-changeme}
+    networks:
+      - chat-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks:
+  chat-network:
+    driver: bridge
