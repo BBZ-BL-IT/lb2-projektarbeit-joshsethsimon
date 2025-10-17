@@ -732,6 +732,24 @@ io.on("connection", (socket) => {
     const onlineUsers = Array.from(connectedUsers.values());
     io.emit('users', onlineUsers);
 
+    // Send user left message to RabbitMQ queue to appear in chat
+    if (channel) {
+      try {
+        await channel.sendToQueue(
+          "user_actions",
+          Buffer.from(JSON.stringify({
+            message: `User left: ${username}`,
+            username: "SYSTEM",
+            timestamp: new Date(),
+            room: 'general',
+          })),
+          { persistent: true }
+        );
+      } catch (error) {
+        console.error("Error sending user left message to RabbitMQ:", error);
+      }
+    }
+
     // Log the disconnect action
     logWSEvent("user_disconnected", username, {
       socketId: socket.id,
