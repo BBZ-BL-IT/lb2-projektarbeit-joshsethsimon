@@ -849,6 +849,12 @@ function ChatApp() {
     }
   };
 
+  const toggleSystemMessages = () => {
+    const newValue = !hideSystemMessages;
+    setHideSystemMessages(newValue);
+    localStorage.setItem('hideSystemMessages', newValue.toString());
+  };
+
   const refreshData = () => {
     loadMessages();
     loadOnlineUsers();
