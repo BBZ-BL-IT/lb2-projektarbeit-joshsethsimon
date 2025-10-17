@@ -8,7 +8,12 @@ import App from './App';
 // Polyfills for Simple-Peer (needed for browser compatibility)
 import { Buffer } from 'buffer';
 window.Buffer = Buffer;
-window.process = window.process || { env: {} };
+window.process = window.process || { 
+  env: {},
+  nextTick: function(fn) {
+    setTimeout(fn, 0);
+  }
+};
 
 const theme = createTheme({
   palette: {

@@ -26,6 +26,7 @@ export function useWebRTC(socket) {
   const remoteVideoRef = useRef(null);
   const peerRef = useRef(null);
   const localStreamRef = useRef(null);
+  const pendingCandidatesRef = useRef([]); // Queue for ICE candidates received before peer is ready
 
   // Attach local stream to video element when available
   useEffect(() => {
@@ -218,6 +219,9 @@ export function useWebRTC(socket) {
       remoteVideoRef.current.srcObject = null;
     }
     
+    // Clear pending candidates
+    pendingCandidatesRef.current = [];
+    
     // Reset state
     setIsCallActive(false);
     setCallDialogOpen(false);
@@ -299,6 +303,19 @@ export function useWebRTC(socket) {
         peer.signal(callData.signal);
       }
       
+      // Process any queued ICE candidates
+      if (pendingCandidatesRef.current.length > 0) {
+        console.log(`Processing ${pendingCandidatesRef.current.length} queued ICE candidates`);
+        pendingCandidatesRef.current.forEach(candidate => {
+          try {
+            peer.signal(candidate);
+          } catch (err) {
+            console.warn("Error signaling queued candidate:", err);
+          }
+        });
+        pendingCandidatesRef.current = [];
+      }
+      
     } catch (error) {
       console.error("Error accepting call:", error);
       handleCallEnd();
@@ -335,6 +352,10 @@ export function useWebRTC(socket) {
           signal: data.signal
         });
         setCurrentCallTarget(data.from);
+      } else if (!data.signal?.type) {
+        // It's an ICE candidate - queue it for later
+        console.log("Queuing ICE candidate for when peer is ready");
+        pendingCandidatesRef.current.push(data.signal);
       } else {
         console.warn("Received signal but no peer exists and not an offer");
       }
