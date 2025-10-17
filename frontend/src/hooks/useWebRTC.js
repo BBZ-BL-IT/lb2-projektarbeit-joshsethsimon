@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { getWebRTCConfig } from "../utils/webrtc-helper";
 
 export function useWebRTC(socket) {
@@ -268,11 +268,11 @@ export function useWebRTC(socket) {
     }
   };
 
-  const handleCallOffer = async (data) => {
+  const handleCallOffer = useCallback(async (data) => {
     console.log("Received call offer from", data.from);
     setIncomingCall(data);
     setCurrentCallTarget(data.from);
-  };
+  }, []);
 
   const acceptCall = async () => {
     try {
@@ -346,7 +346,7 @@ export function useWebRTC(socket) {
     setCurrentCallTarget(null);
   };
 
-  const handleCallAnswer = async (data) => {
+  const handleCallAnswer = useCallback(async (data) => {
     try {
       console.log("Received call answer from", data.from);
       if (peerConnectionRef.current) {
@@ -370,9 +370,9 @@ export function useWebRTC(socket) {
     } catch (error) {
       console.error("Failed to handle call answer:", error);
     }
-  };
+  }, []);
 
-  const handleIceCandidate = async (data) => {
+  const handleIceCandidate = useCallback(async (data) => {
     try {
       console.log("Received ICE candidate");
       const candidate = data.candidate;
@@ -389,7 +389,7 @@ export function useWebRTC(socket) {
     } catch (error) {
       console.error("Failed to handle ICE candidate:", error);
     }
-  };
+  }, []);
 
   const endCall = () => {
     if (socket && currentCallTarget) {
@@ -398,7 +398,7 @@ export function useWebRTC(socket) {
     handleCallEnd();
   };
 
-  const handleCallEnd = () => {
+  const handleCallEnd = useCallback(() => {
     console.log("Ending call");
 
     if (peerConnectionRef.current) {
@@ -425,7 +425,7 @@ export function useWebRTC(socket) {
     setIsMuted(false);
     setIsVideoEnabled(true);
     pendingIceCandidatesRef.current = [];
-  };
+  }, []);
 
   const toggleMute = () => {
     if (localStreamRef.current) {

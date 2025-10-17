@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Container, Box, Alert, IconButton } from "@mui/material";
 import { Menu } from "@mui/icons-material";
 import io from "socket.io-client";
@@ -55,6 +55,40 @@ function ChatApp() {
 
   // WebRTC Hook
   const webrtc = useWebRTC(socket);
+
+  // Load messages and users
+  const loadMessages = useCallback(async () => {
+    try {
+      setLoading(true);
+      const endpoint = hideSystemMessages 
+        ? `${API_URL}/api/chat/messages/user`
+        : `${API_URL}/api/chat/messages/recent`;
+      
+      const response = await axios.get(endpoint, {
+        params: { limit: 50 },
+      });
+
+      if (response.data.messages) {
+        setMessages(response.data.messages);
+      }
+    } catch (error) {
+      console.error("Failed to load messages:", error);
+      setError("Failed to load chat history");
+    } finally {
+      setLoading(false);
+    }
+  }, [hideSystemMessages]);
+
+  const loadOnlineUsers = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/chat/users`);
+      if (response.data.users) {
+        setOnlineUsers(response.data.users.filter((u) => u !== username));
+      }
+    } catch (error) {
+      console.error("Failed to load online users:", error);
+    }
+  }, [username]);
 
   // Check for stored credentials on component mount
   useEffect(() => {
@@ -199,47 +233,14 @@ function ChatApp() {
         setError("Failed to initialize chat connection");
       }
     }
-  }, [isLoggedIn, username, hideSystemMessages, webrtc]);
+  }, [isLoggedIn, username, hideSystemMessages, webrtc.handleCallOffer, webrtc.handleCallAnswer, webrtc.handleIceCandidate, webrtc.handleCallEnd]);
 
   useEffect(() => {
     if (isLoggedIn) {
       loadMessages();
       loadOnlineUsers();
     }
-  }, [isLoggedIn, hideSystemMessages]);
-
-  const loadMessages = async () => {
-    try {
-      setLoading(true);
-      const endpoint = hideSystemMessages 
-        ? `${API_URL}/api/chat/messages/user`
-        : `${API_URL}/api/chat/messages/recent`;
-      
-      const response = await axios.get(endpoint, {
-        params: { limit: 50 },
-      });
-
-      if (response.data.messages) {
-        setMessages(response.data.messages);
-      }
-    } catch (error) {
-      console.error("Failed to load messages:", error);
-      setError("Failed to load chat history");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadOnlineUsers = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/api/chat/users`);
-      if (response.data.users) {
-        setOnlineUsers(response.data.users.filter((u) => u !== username));
-      }
-    } catch (error) {
-      console.error("Failed to load online users:", error);
-    }
-  };
+  }, [isLoggedIn, hideSystemMessages, loadMessages, loadOnlineUsers]);
 
   const handleLogin = async () => {
     if (!username.trim()) {
