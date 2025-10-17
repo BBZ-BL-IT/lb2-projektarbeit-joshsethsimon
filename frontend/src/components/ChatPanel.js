@@ -18,6 +18,7 @@ function ChatPanel({
   typingUsers,
   socketConnected,
   loading,
+  hideSystemMessages = false,
 }) {
   const messagesEndRef = useRef(null);
 
@@ -28,6 +29,11 @@ function ChatPanel({
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Filter messages based on hideSystemMessages setting
+  const displayedMessages = hideSystemMessages 
+    ? messages.filter(msg => msg.username !== 'SYSTEM')
+    : messages;
 
   const handleKeyPress = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -84,17 +90,17 @@ function ChatPanel({
             Loading messages...
           </Typography>
         )}
-        {messages.map((msg, index) => (
+        {displayedMessages.map((msg, index) => (
           <Box
             key={msg._id || index}
             sx={{
               marginBottom: "16px",
               padding: "12px",
               borderRadius: "12px",
-              background: msg.username === username ? "#e3f2fd" : "white",
+              background: msg.username === username ? "#e3f2fd" : msg.username === 'SYSTEM' ? "#fff3cd" : "white",
               border: "1px solid",
               borderColor:
-                msg.username === username ? "#90caf9" : "#e0e0e0",
+                msg.username === username ? "#90caf9" : msg.username === 'SYSTEM' ? "#ffc107" : "#e0e0e0",
               maxWidth: "70%",
               marginLeft: msg.username === username ? "auto" : "0",
               marginRight: msg.username === username ? "0" : "auto",
@@ -103,7 +109,7 @@ function ChatPanel({
             <Typography
               variant="subtitle2"
               sx={{
-                color: "#667eea",
+                color: msg.username === 'SYSTEM' ? "#856404" : "#667eea",
                 fontWeight: 600,
                 marginBottom: "4px",
               }}

@@ -24,7 +24,7 @@ import Logs from "./Logs";
 import TurnStats from "./TurnStats";
 
 // Hooks and Utils
-import { useWebRTC } from "./hooks/useWebRTC";
+import { useWebRTC } from "./hooks/useWebRTC_simple_peer";
 import { isTurnServiceAvailable } from "./utils/webrtc-helper";
 
 const API_URL = process.env.REACT_APP_API_URL || "";
@@ -158,21 +158,11 @@ function ChatApp() {
         });
 
         newSocket.on("message", (data) => {
-          setMessages((prev) => {
-            if (hideSystemMessages && data.username === 'SYSTEM') {
-              return prev;
-            }
-            return [...prev, data];
-          });
+          setMessages((prev) => [...prev, data]);
         });
 
         newSocket.on("new_message", (data) => {
-          setMessages((prev) => {
-            if (hideSystemMessages && data.username === 'SYSTEM') {
-              return prev;
-            }
-            return [...prev, data];
-          });
+          setMessages((prev) => [...prev, data]);
         });
 
         newSocket.on("message-history", (history) => {
@@ -203,11 +193,14 @@ function ChatApp() {
           });
         });
 
-        // WebRTC event handlers
+        // WebRTC event handlers with Simple-Peer
+        newSocket.on("webrtc-signal", webrtc.handleSignal);
         newSocket.on("call-offer", webrtc.handleCallOffer);
-        newSocket.on("call-answer", webrtc.handleCallAnswer);
-        newSocket.on("ice-candidate", webrtc.handleIceCandidate);
         newSocket.on("call-end", webrtc.handleCallEnd);
+        newSocket.on("call-declined", () => {
+          console.log("Call was declined");
+          webrtc.handleCallEnd();
+        });
 
         newSocket.on("message-deleted", (data) => {
           setMessages((prev) =>
@@ -233,7 +226,7 @@ function ChatApp() {
         setError("Failed to initialize chat connection");
       }
     }
-  }, [isLoggedIn, username, hideSystemMessages, webrtc.handleCallOffer, webrtc.handleCallAnswer, webrtc.handleIceCandidate, webrtc.handleCallEnd]);
+  }, [isLoggedIn, username, webrtc.handleCallOffer, webrtc.handleSignal, webrtc.handleCallEnd]);
 
   useEffect(() => {
     if (isLoggedIn) {
@@ -361,6 +354,9 @@ function ChatApp() {
     const newValue = !hideSystemMessages;
     setHideSystemMessages(newValue);
     localStorage.setItem('hideSystemMessages', newValue.toString());
+    // Reload messages with the new filter setting
+    // Note: We don't call loadMessages() here because it uses the old hideSystemMessages value
+    // The useEffect with [hideSystemMessages] dependency will trigger the reload
   };
 
   const refreshData = () => {
@@ -477,6 +473,7 @@ function ChatApp() {
             typingUsers={typingUsers}
             socketConnected={socket?.connected}
             loading={loading}
+            hideSystemMessages={hideSystemMessages}
           />
         </Box>
       </Container>

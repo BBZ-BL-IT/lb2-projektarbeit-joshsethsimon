@@ -559,6 +559,73 @@ io.on("connection", (socket) => {
     }
   });
 
+  // Handle Simple-Peer WebRTC signaling (replaces call-offer, call-answer, ice-candidate)
+  socket.on('webrtc-signal', (data) => {
+    const { target, signal } = data;
+    const targetSocketId = userSocketMap.get(target);
+
+    if (targetSocketId) {
+      // Check if this is the start of a new call (offer signal)
+      if (signal.type === 'offer') {
+        const callId = `${socket.username}-${target}-${Date.now()}`;
+        callSessions.set(callId, {
+          caller: socket.username,
+          callee: target,
+          callerSocketId: socket.id,
+          calleeSocketId: targetSocketId,
+          startTime: new Date()
+        });
+
+        logWebRTCEvent('call_initiated', socket.username, {
+          target,
+          callId,
+          signalType: 'offer'
+        });
+
+        console.log(`[SimplePeer] Call initiated from ${socket.username} to ${target} - CallID: ${callId}`);
+      } else if (signal.type === 'answer') {
+        logWebRTCEvent('call_answered', socket.username, {
+          caller: target,
+          signalType: 'answer'
+        });
+
+        console.log(`[SimplePeer] Call answered from ${socket.username} to ${target}`);
+      }
+
+      // Forward the signal to the target user
+      io.to(targetSocketId).emit('webrtc-signal', {
+        from: socket.username,
+        signal: signal
+      });
+    } else {
+      logWebRTCEvent('signal_failed', socket.username, {
+        target,
+        reason: 'target_not_found',
+        signalType: signal.type || 'unknown'
+      });
+      
+      console.log(`[SimplePeer] Signal failed - target ${target} not found`);
+    }
+  });
+
+  // Handle call declined
+  socket.on('call-declined', (data) => {
+    const { target } = data;
+    const targetSocketId = userSocketMap.get(target);
+
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('call-declined', {
+        from: socket.username
+      });
+
+      logWebRTCEvent('call_declined', socket.username, {
+        caller: target
+      });
+
+      console.log(`[Call] Declined by ${socket.username} from ${target}`);
+    }
+  });
+
   // Handle call end
   socket.on('call-end', () => {
     // Find and clean up call session
