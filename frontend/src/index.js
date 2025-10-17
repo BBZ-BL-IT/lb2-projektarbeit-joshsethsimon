@@ -5,6 +5,11 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import App from './App';
 
+// Polyfills for Simple-Peer (needed for browser compatibility)
+import { Buffer } from 'buffer';
+window.Buffer = Buffer;
+window.process = window.process || { env: {} };
+
 const theme = createTheme({
   palette: {
     mode: 'light',

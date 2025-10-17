@@ -195,7 +195,6 @@ function ChatApp() {
 
         // WebRTC event handlers with Simple-Peer
         newSocket.on("webrtc-signal", webrtc.handleSignal);
-        newSocket.on("call-offer", webrtc.handleCallOffer);
         newSocket.on("call-end", webrtc.handleCallEnd);
         newSocket.on("call-declined", () => {
           console.log("Call was declined");
@@ -226,7 +225,7 @@ function ChatApp() {
         setError("Failed to initialize chat connection");
       }
     }
-  }, [isLoggedIn, username, webrtc.handleCallOffer, webrtc.handleSignal, webrtc.handleCallEnd]);
+  }, [isLoggedIn, username, hideSystemMessages, webrtc.handleSignal, webrtc.handleCallEnd]);
 
   useEffect(() => {
     if (isLoggedIn) {

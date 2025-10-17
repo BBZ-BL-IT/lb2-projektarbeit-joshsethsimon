@@ -204,7 +204,11 @@ export function useWebRTC(socket) {
    */
   const handleCallOffer = useCallback((data) => {
     console.log("Incoming call from:", data.from);
-    setIncomingCall(data);
+    // Store the offer signal with the incoming call data
+    setIncomingCall({
+      from: data.from,
+      signal: data.signal
+    });
     setCurrentCallTarget(data.from);
   }, []);
 
@@ -231,16 +235,19 @@ export function useWebRTC(socket) {
       const peer = await createPeer(false, stream, callData.from);
       peerRef.current = peer;
       
-      // Signal the stored offer to complete the connection
-      // The signal event handler will automatically send our answer back
-      console.log("Accepting incoming signal");
+      // Important: Signal the incoming offer to the peer
+      // This will trigger the peer to create and send an answer
+      if (callData.signal) {
+        console.log("Signaling incoming offer to peer");
+        peer.signal(callData.signal);
+      }
       
     } catch (error) {
       console.error("Error accepting call:", error);
       handleCallEnd();
       throw error;
     }
-  }, [incomingCall, getUserMedia, createPeer]);
+  }, [incomingCall, getUserMedia, createPeer, handleCallEnd]);
 
   /**
    * Decline an incoming call
@@ -260,22 +267,30 @@ export function useWebRTC(socket) {
    * Handle incoming WebRTC signal (offer, answer, or ICE candidate)
    */
   const handleSignal = useCallback((data) => {
-    console.log("Received signal from:", data.from);
+    console.log("Received signal from:", data.from, "Type:", data.signal?.type || 'candidate');
     
-    if (peerRef.current) {
-      // Signal the peer with the received data
-      peerRef.current.signal(data.signal);
-    } else {
-      console.warn("Received signal but no peer exists");
-      // Store signal for incoming call
-      if (!incomingCall && data.signal.type === 'offer') {
+    if (!peerRef.current) {
+      // If no peer exists and this is an offer, store it for when user accepts
+      if (data.signal?.type === 'offer') {
+        console.log("Storing offer for incoming call");
         setIncomingCall({
           from: data.from,
           signal: data.signal
         });
+        setCurrentCallTarget(data.from);
+      } else {
+        console.warn("Received signal but no peer exists and not an offer");
       }
+      return;
     }
-  }, [incomingCall]);
+    
+    // We have a peer, signal it
+    try {
+      peerRef.current.signal(data.signal);
+    } catch (error) {
+      console.error("Error signaling peer:", error);
+    }
+  }, []);
 
   /**
    * End the current call
